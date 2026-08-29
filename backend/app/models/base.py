@@ -1,7 +1,11 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import JSON, DateTime, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
+
+# JSONB in Postgres, plain JSON everywhere else so the test suite can use SQLite.
+JsonColumn = JSON().with_variant(JSONB(), "postgresql")
 
 
 class TimestampMixin:

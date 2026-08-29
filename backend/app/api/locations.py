@@ -41,10 +41,11 @@ def location_tree(db: DbSession, _: CurrentUser) -> list[LocationNode]:
         db.execute(select(Part.location_id, func.count()).group_by(Part.location_id)).all()
     )
 
-    nodes = {
-        loc.id: LocationNode.model_validate(loc, update={"part_count": counts.get(loc.id, 0)})
-        for loc in locations
-    }
+    nodes: dict[int, LocationNode] = {}
+    for loc in locations:
+        node = LocationNode.model_validate(loc)
+        node.part_count = counts.get(loc.id, 0)
+        nodes[loc.id] = node
 
     roots: list[LocationNode] = []
     for loc in locations:

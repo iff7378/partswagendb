@@ -3,12 +3,11 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.enums import ExpenseCategory, VehicleStatus
-from app.models.base import TimestampMixin
+from app.models.base import JsonColumn, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.part import Part
@@ -41,7 +40,7 @@ class Vehicle(Base, TimestampMixin):
     notes: Mapped[str | None] = mapped_column(Text)
 
     # Raw NHTSA vPIC response, kept so we can re-derive fields without re-fetching.
-    decoded_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    decoded_data: Mapped[dict[str, Any] | None] = mapped_column(JsonColumn)
 
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_by: Mapped["User | None"] = relationship()

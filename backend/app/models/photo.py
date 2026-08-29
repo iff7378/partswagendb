@@ -1,12 +1,11 @@
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.enums import OcrStatus
-from app.models.base import TimestampMixin
+from app.models.base import JsonColumn, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.part import Part
@@ -42,7 +41,7 @@ class Photo(Base, TimestampMixin):
     )
     ocr_text: Mapped[str | None] = mapped_column(Text)
     # Ranked part-number candidates extracted from ocr_text.
-    ocr_candidates: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    ocr_candidates: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonColumn)
 
     uploaded_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     uploaded_by: Mapped["User | None"] = relationship()
