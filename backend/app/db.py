@@ -1,5 +1,4 @@
 from collections.abc import Generator
-from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -12,8 +11,6 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, futu
 
 class Base(DeclarativeBase):
     """Declarative base for all ORM models."""
-
-    type_annotation_map: dict[Any, Any] = {}
 
 
 def get_db() -> Generator[Session, None, None]:
