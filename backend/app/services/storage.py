@@ -15,16 +15,31 @@ logger = logging.getLogger(__name__)
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic"}
 
 
-@lru_cache
-def get_s3_client():  # type: ignore[no-untyped-def]
+def _build_client(endpoint_url: str):  # type: ignore[no-untyped-def]
     return boto3.client(
         "s3",
-        endpoint_url=settings.s3_endpoint_url,
+        endpoint_url=endpoint_url,
         aws_access_key_id=settings.s3_access_key,
         aws_secret_access_key=settings.s3_secret_key,
         region_name=settings.s3_region,
         config=Config(signature_version="s3v4"),
     )
+
+
+@lru_cache
+def get_s3_client():  # type: ignore[no-untyped-def]
+    """Client for server-side calls, over the internal container network."""
+    return _build_client(settings.s3_endpoint_url)
+
+
+@lru_cache
+def get_presign_client():  # type: ignore[no-untyped-def]
+    """Client for links handed to browsers.
+
+    Signed separately against the public endpoint because SigV4 covers the Host
+    header: rewriting the host after signing invalidates the signature.
+    """
+    return _build_client(settings.s3_public_endpoint_url)
 
 
 def ensure_bucket() -> None:
@@ -63,14 +78,11 @@ def delete_object(key: str) -> None:
 def presigned_url(key: str | None) -> str | None:
     if not key:
         return None
-    url: str = get_s3_client().generate_presigned_url(
+    url: str = get_presign_client().generate_presigned_url(
         "get_object",
         Params={"Bucket": settings.s3_bucket, "Key": key},
         ExpiresIn=settings.presigned_url_ttl_seconds,
     )
-    # Sign against the internal endpoint but hand the browser a reachable host.
-    if settings.s3_public_endpoint_url != settings.s3_endpoint_url:
-        url = url.replace(settings.s3_endpoint_url, settings.s3_public_endpoint_url, 1)
     return url
 
 

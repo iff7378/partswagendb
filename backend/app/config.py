@@ -1,6 +1,5 @@
 from functools import lru_cache
 
-from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,7 +22,9 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
     algorithm: str = "HS256"
 
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # Kept as a plain string: pydantic-settings tries to JSON-decode list-typed
+    # fields straight from the environment, which a comma-separated value fails.
+    cors_origins: str = "http://localhost:5173"
 
     first_admin_email: str | None = None
     first_admin_password: str | None = None
@@ -43,12 +44,9 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 25 * 1024 * 1024
     thumbnail_max_px: int = 512
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def split_origins(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
-        return value
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def database_url(self) -> str:

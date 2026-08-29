@@ -42,3 +42,27 @@ def test_keeps_hyphenated_numbers() -> None:
 def test_results_are_capped() -> None:
     text = " ".join(f"ABC{i:05d}" for i in range(50))
     assert len(find_part_numbers(text)) <= 10
+
+
+def test_recovers_a_vag_number_misread_with_letter_o() -> None:
+    # Tesseract commonly reads a stamped 0 as the letter O.
+    assert values("BOSCH\nO6A 906 461 L\nMADE IN GERMANY") == ["06A 906 461 L"]
+
+
+def test_recovers_a_bosch_number_misread_with_letter_o() -> None:
+    assert values("BOSCH O 28O 218 OO2") == ["0 280 218 002"]
+
+
+def test_letter_suffix_is_not_turned_into_a_digit() -> None:
+    # The trailing L is a real index letter, not a misread 1.
+    assert values("06A 906 461 L")[0].endswith(" L")
+
+
+def test_a_fragment_inside_a_longer_match_is_dropped() -> None:
+    # The VAG pattern can match part of a Bosch number; only the full one survives.
+    assert values("0 280 218 002") == ["0 280 218 002"]
+
+
+def test_words_are_not_mistaken_for_part_numbers() -> None:
+    assert values("ALTERNATOR ASSEMBLY REMANUFACTURED") == []
+    assert values("MADE IN GERMANY") == []

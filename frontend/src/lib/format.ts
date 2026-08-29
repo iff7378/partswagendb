@@ -8,9 +8,21 @@ export function money(value: string | number | null | undefined): string {
   return Number.isNaN(amount) ? '—' : currency.format(amount)
 }
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
 export function date(value: string | null | undefined): string {
   if (!value) return '—'
-  return new Date(value).toLocaleDateString('en-US', {
+
+  // A bare YYYY-MM-DD is parsed as UTC midnight, which renders as the previous
+  // day anywhere west of Greenwich. Build it in local time instead.
+  const parts = DATE_ONLY.exec(value)
+  const parsed = parts
+    ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]))
+    : new Date(value)
+
+  if (Number.isNaN(parsed.getTime())) return '—'
+
+  return parsed.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
