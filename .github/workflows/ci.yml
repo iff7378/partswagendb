@@ -90,13 +90,14 @@ jobs:
 
       - name: Fail if the models have drifted from the migrations
         run: |
-          alembic revision --autogenerate -m "drift check" --rev-id drift-check
-          if grep -qE "op\.(create|drop|add|alter)_" alembic/versions/drift-check_*.py; then
+          # Alembic rejects hyphens in revision identifiers.
+          alembic revision --autogenerate -m "drift check" --rev-id driftcheck
+          if grep -qE "op\.(create|drop|add|alter)_" alembic/versions/driftcheck_*.py; then
             echo "::error::Models and migrations are out of sync. Generate a migration."
-            cat alembic/versions/drift-check_*.py
+            cat alembic/versions/driftcheck_*.py
             exit 1
           fi
-          rm -f alembic/versions/drift-check_*.py
+          rm -f alembic/versions/driftcheck_*.py
 
       - name: Roll all the way back down
         run: alembic downgrade base
