@@ -22,10 +22,7 @@ class Part(Base, TimestampMixin):
     """A single inventoried component pulled from a donor vehicle."""
 
     __tablename__ = "parts"
-    __table_args__ = (
-        Index("ix_parts_status_category", "status", "category_id"),
-        Index("ix_parts_part_number_lower", "part_number"),
-    )
+    __table_args__ = (Index("ix_parts_status_category", "status", "category_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # Human-readable scannable identifier printed on the part's QR label.

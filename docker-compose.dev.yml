@@ -1,0 +1,13 @@
+# Development overrides: exposes backing services to the host so you can run
+# the backend and frontend natively.
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres minio
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  backend:
+    profiles: ["container"]
+
+  frontend:
+    profiles: ["container"]

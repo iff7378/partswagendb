@@ -8,15 +8,15 @@ from app.schemas.vehicle import VinDecodeResult
 
 logger = logging.getLogger(__name__)
 
-# NHTSA vPIC returns a flat list of ~140 variables; these are the ones worth keeping.
+# The flat decodevinvalues endpoint returns ~140 variables keyed without spaces.
 _FIELD_MAP = {
-    "Model Year": "year",
+    "ModelYear": "year",
     "Make": "make",
     "Model": "model",
     "Trim": "trim",
-    "Body Class": "body_style",
-    "Drive Type": "drive_type",
-    "Transmission Style": "transmission",
+    "BodyClass": "body_style",
+    "DriveType": "drive_type",
+    "TransmissionStyle": "transmission",
 }
 
 
@@ -30,9 +30,9 @@ def _clean(value: Any) -> str | None:
 
 
 def _build_engine(values: dict[str, str]) -> str | None:
-    displacement = _clean(values.get("Displacement (L)"))
-    cylinders = _clean(values.get("Engine Number of Cylinders"))
-    config = _clean(values.get("Engine Configuration"))
+    displacement = _clean(values.get("DisplacementL"))
+    cylinders = _clean(values.get("EngineCylinders"))
+    config = _clean(values.get("EngineConfiguration"))
 
     bits: list[str] = []
     if displacement:
