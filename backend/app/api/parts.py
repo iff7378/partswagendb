@@ -45,7 +45,7 @@ def _resolve_tags(db: Session, names: list[str]) -> list[Tag]:
     return tags
 
 
-def _validate_references(db: Session, data: dict) -> None:  # type: ignore[type-arg]
+def _validate_references(db: Session, data: dict[str, object]) -> None:
     for field, model, label in (
         ("vehicle_id", Vehicle, "Vehicle"),
         ("category_id", PartCategory, "Category"),

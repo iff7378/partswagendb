@@ -6,7 +6,7 @@ from functools import lru_cache
 import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.config import settings
 
@@ -77,12 +77,14 @@ def presigned_url(key: str | None) -> str | None:
 def make_thumbnail(data: bytes) -> tuple[bytes, int, int] | None:
     """Return (jpeg_bytes, original_width, original_height), or None if unreadable."""
     try:
-        with Image.open(io.BytesIO(data)) as img:
-            img = img.convert("RGB")
-            width, height = img.size
-            img.thumbnail((settings.thumbnail_max_px, settings.thumbnail_max_px))
+        with Image.open(io.BytesIO(data)) as opened:
+            # Phones record orientation in EXIF rather than rotating the pixels,
+            # so without this portrait shots come out sideways.
+            image = ImageOps.exif_transpose(opened).convert("RGB")
+            width, height = image.size
+            image.thumbnail((settings.thumbnail_max_px, settings.thumbnail_max_px))
             buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=82, optimize=True)
+            image.save(buffer, format="JPEG", quality=82, optimize=True)
             return buffer.getvalue(), width, height
     except (UnidentifiedImageError, OSError):
         logger.warning("Could not generate thumbnail", exc_info=True)

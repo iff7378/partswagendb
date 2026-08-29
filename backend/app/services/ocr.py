@@ -37,7 +37,9 @@ def _preprocess(image: Image.Image) -> Image.Image:
     image = ImageOps.autocontrast(image)
     if max(image.size) < 1600:
         scale = 1600 / max(image.size)
-        image = image.resize((int(image.width * scale), int(image.height * scale)), Image.LANCZOS)
+        image = image.resize(
+            (int(image.width * scale), int(image.height * scale)), Image.Resampling.LANCZOS
+        )
     return image.filter(ImageFilter.SHARPEN)
 
 

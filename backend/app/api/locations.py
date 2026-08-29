@@ -37,9 +37,11 @@ def list_locations(db: DbSession, _: CurrentUser) -> list[Location]:
 def location_tree(db: DbSession, _: CurrentUser) -> list[LocationNode]:
     locations = list(db.execute(select(Location).order_by(Location.name)).scalars())
 
-    counts = dict(
-        db.execute(select(Part.location_id, func.count()).group_by(Part.location_id)).all()
-    )
+    counts: dict[int | None, int] = {}
+    for location_id, total in db.execute(
+        select(Part.location_id, func.count()).group_by(Part.location_id)
+    ).all():
+        counts[location_id] = total
 
     nodes: dict[int, LocationNode] = {}
     for loc in locations:
