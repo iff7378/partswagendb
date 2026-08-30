@@ -66,3 +66,38 @@ def test_a_fragment_inside_a_longer_match_is_dropped() -> None:
 def test_words_are_not_mistaken_for_part_numbers() -> None:
     assert values("ALTERNATOR ASSEMBLY REMANUFACTURED") == []
     assert values("MADE IN GERMANY") == []
+
+
+def test_large_photos_are_downscaled_before_ocr() -> None:
+    """A full-size phone photo must be scaled down, not passed through.
+
+    Left at 12MP, Tesseract reads sensor noise instead of the label and returns
+    nothing. Scaling the long edge to ~1600px is what makes the text dominant.
+    """
+    from PIL import Image
+
+    from app.services.ocr import TARGET_LONG_EDGE_PX, _preprocess
+
+    processed = _preprocess(Image.new("RGB", (4032, 3024)))
+    assert max(processed.size) == TARGET_LONG_EDGE_PX
+    # Aspect ratio preserved.
+    assert processed.size == (1600, 1200)
+
+
+def test_small_photos_are_scaled_up_before_ocr() -> None:
+    from PIL import Image
+
+    from app.services.ocr import TARGET_LONG_EDGE_PX, _preprocess
+
+    processed = _preprocess(Image.new("RGB", (400, 300)))
+    assert max(processed.size) == TARGET_LONG_EDGE_PX
+
+
+def test_preprocessing_does_not_sharpen() -> None:
+    """Sharpening re-amplifies the noise the downscale removes, which makes
+    Tesseract miss labels it would otherwise read."""
+    import inspect
+
+    from app.services import ocr
+
+    assert "ImageFilter" not in inspect.getsource(ocr)
