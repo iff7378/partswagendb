@@ -25,10 +25,6 @@ class CategoryRead(CategoryBase, ORMModel):
     path: str
 
 
-class CategoryNode(CategoryRead):
-    children: list["CategoryNode"] = Field(default_factory=list)
-
-
 class TagRead(ORMModel):
     id: int
     name: str

@@ -1,7 +1,8 @@
-import { BrowserQRCodeReader } from '@zxing/browser'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import QrScanner from '../components/QrScannerLazy'
 import { ErrorNote, Field, PageHeader } from '../components/ui'
 import { api, ApiError } from '../lib/api'
 import type { PartDetail, StorageLocation } from '../lib/types'
@@ -22,74 +23,29 @@ async function resolveCode(code: string): Promise<string> {
 
 export default function Scan() {
   const navigate = useNavigate()
-  const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState<unknown>(null)
   const [manual, setManual] = useState('')
-  const [scanning, setScanning] = useState(false)
+  const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    const reader = new BrowserQRCodeReader()
-    let stopped = false
-    let controls: { stop: () => void } | undefined
-
-    async function start() {
-      try {
-        setScanning(true)
-        controls = await reader.decodeFromVideoDevice(
-          undefined,
-          videoRef.current!,
-          (result) => {
-            if (!result || stopped) return
-            stopped = true
-            controls?.stop()
-            void go(result.getText())
-          },
-        )
-      } catch {
-        setScanning(false)
-        setError(
-          new Error(
-            'Could not open the camera. Check permissions, or type the code in below. ' +
-              'Note that browsers only allow the camera over HTTPS or on localhost.',
-          ),
-        )
-      }
-    }
-
-    async function go(code: string) {
-      try {
-        navigate(await resolveCode(code))
-      } catch (err) {
-        stopped = false
-        setError(
-          err instanceof ApiError && err.status === 404
-            ? new Error(`Nothing matches the code "${code}".`)
-            : err,
-        )
-        void start()
-      }
-    }
-
-    void start()
-
-    return () => {
-      stopped = true
-      controls?.stop()
-    }
-  }, [navigate])
-
-  async function onManualSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  async function go(code: string) {
     setError(null)
+    setBusy(true)
     try {
-      navigate(await resolveCode(manual))
+      navigate(await resolveCode(code))
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 404
-          ? new Error(`Nothing matches the code "${manual}".`)
+          ? new Error(`Nothing matches the code "${code}".`)
           : err,
       )
+    } finally {
+      setBusy(false)
     }
+  }
+
+  function onManualSubmit(event: FormEvent) {
+    event.preventDefault()
+    void go(manual)
   }
 
   return (
@@ -99,15 +55,10 @@ export default function Scan() {
       <div className="space-y-4">
         <ErrorNote error={error} />
 
-        <div className="card overflow-hidden">
-          <video
-            ref={videoRef}
-            className="aspect-square w-full bg-slate-900 object-cover"
-            muted
-            playsInline
-          />
-          <p className="px-4 py-3 text-center text-sm text-ink-soft">
-            {scanning ? 'Looking for a QR code…' : 'Camera unavailable'}
+        <div className="card space-y-2 p-3">
+          <QrScanner paused={busy} onResult={(code) => void go(code)} />
+          <p className="text-center text-sm text-ink-soft">
+            {busy ? 'Looking it up…' : 'Looking for a QR code…'}
           </p>
         </div>
 
@@ -120,7 +71,7 @@ export default function Scan() {
               placeholder="P-000123"
             />
           </Field>
-          <button type="submit" className="btn-primary w-full" disabled={!manual.trim()}>
+          <button type="submit" className="btn-primary w-full" disabled={!manual.trim() || busy}>
             Go
           </button>
         </form>

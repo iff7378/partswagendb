@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import QrScanner from '../components/QrScannerLazy'
 import { ErrorNote, Field, PageHeader, Spinner, StatusChip } from '../components/ui'
 import { api, download } from '../lib/api'
 import { CONDITION_LABELS, STATUS_LABELS, date, money } from '../lib/format'
@@ -100,6 +101,8 @@ export default function PartDetailPage() {
       />
 
       <ErrorNote error={update.error ?? remove.error ?? uploadPhoto.error} />
+
+      {canEdit && <MovePart part={p} />}
 
       {editing ? (
         <EditForm part={p} onSave={(payload) => update.mutate(payload)} saving={update.isPending} />
@@ -470,5 +473,103 @@ function EditForm({
         {saving ? 'Saving…' : 'Save changes'}
       </button>
     </form>
+  )
+}
+
+function MovePart({ part }: { part: PartDetail }) {
+  const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [moved, setMoved] = useState<string | null>(null)
+
+  const locations = useQuery({
+    queryKey: ['locations'],
+    queryFn: () => api.get<StorageLocation[]>('/locations'),
+  })
+
+  const move = useMutation({
+    mutationFn: (body: { location_id?: number | null; location_code?: string }) =>
+      api.post<PartDetail>(`/parts/${part.id}/move`, body),
+    onSuccess: (updated) => {
+      void queryClient.invalidateQueries({ queryKey: ['part', String(part.id)] })
+      void queryClient.invalidateQueries({ queryKey: ['parts'] })
+      void queryClient.invalidateQueries({ queryKey: ['locations'] })
+      setMoved(updated.location?.path ?? 'Nowhere')
+      setScanning(false)
+    },
+  })
+
+  if (!open) {
+    return (
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <span className="text-sm text-ink-soft">
+          Stored at <strong className="text-ink">{part.location?.path ?? 'nowhere yet'}</strong>
+        </span>
+        <button type="button" className="btn-secondary ml-auto" onClick={() => setOpen(true)}>
+          Move it
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-4 space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+      <ErrorNote error={move.error} />
+      {moved && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Moved to <strong>{moved}</strong>.
+        </p>
+      )}
+
+      {scanning ? (
+        <>
+          <p className="text-sm text-ink-soft">Point the camera at a shelf label.</p>
+          <QrScanner
+            paused={move.isPending}
+            onResult={(code) => move.mutate({ location_code: code.trim().toUpperCase() })}
+          />
+          <button type="button" className="btn-secondary w-full" onClick={() => setScanning(false)}>
+            Stop scanning
+          </button>
+        </>
+      ) : (
+        <>
+          <Field label="Move to">
+            <select
+              className="field"
+              defaultValue={part.location_id ? String(part.location_id) : ''}
+              onChange={(e) =>
+                move.mutate(
+                  e.target.value ? { location_id: Number(e.target.value) } : { location_id: null },
+                )
+              }
+            >
+              <option value="">Nowhere</option>
+              {locations.data?.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.path}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-primary" onClick={() => setScanning(true)}>
+              Scan a shelf label
+            </button>
+            <button
+              type="button"
+              className="btn-secondary ml-auto"
+              onClick={() => {
+                setOpen(false)
+                setMoved(null)
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   )
 }

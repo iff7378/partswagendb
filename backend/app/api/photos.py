@@ -2,7 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile,
 from sqlalchemy import select
 
 from app.config import settings
-from app.core.deps import CurrentUser, DbSession, RequireEditor
+from app.core.deps import DbSession, RequireEditor
 from app.db import SessionLocal
 from app.enums import OcrStatus
 from app.models import Part, Photo
@@ -106,12 +106,6 @@ async def upload_part_photo(
         background.add_task(_run_ocr, photo.id, data)
 
     return _with_urls(photo)
-
-
-@router.get("/parts/{part_id}", response_model=list[PhotoRead])
-def list_part_photos(db: DbSession, _: CurrentUser, part_id: int) -> list[PhotoRead]:
-    photos = db.execute(select(Photo).where(Photo.part_id == part_id).order_by(Photo.id)).scalars()
-    return [_with_urls(p) for p in photos]
 
 
 @router.post("/{photo_id}/primary", response_model=PhotoRead)

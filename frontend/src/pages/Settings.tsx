@@ -5,7 +5,7 @@ import type { FormEvent } from 'react'
 import { ErrorNote, Field, PageHeader, Spinner } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import type { User, UserRole } from '../lib/types'
+import type { Category, User, UserRole } from '../lib/types'
 
 const ROLES: { value: UserRole; label: string; hint: string }[] = [
   { value: 'admin', label: 'Admin', hint: 'Everything, including managing people' },
@@ -22,6 +22,7 @@ export default function Settings() {
       <div className="space-y-6">
         <ChangePassword />
         {isAdmin && <People />}
+        {isAdmin && <Categories />}
       </div>
     </>
   )
@@ -366,5 +367,109 @@ function AddUser({ onDone }: { onDone: () => void }) {
         {create.isPending ? 'Adding…' : 'Add them'}
       </button>
     </form>
+  )
+}
+
+function Categories() {
+  const queryClient = useQueryClient()
+  const [name, setName] = useState('')
+  const [parentId, setParentId] = useState('')
+
+  const categories = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api.get<Category[]>('/categories'),
+  })
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ['categories'] })
+  }
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post('/categories', {
+        name: name.trim(),
+        parent_id: parentId ? Number(parentId) : null,
+      }),
+    onSuccess: () => {
+      refresh()
+      setName('')
+    },
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: number) => api.delete(`/categories/${id}`),
+    onSuccess: refresh,
+  })
+
+  // Only top-level entries can take children, matching how the tree is seeded.
+  const roots = categories.data?.filter((c) => c.parent_id === null) ?? []
+
+  return (
+    <section className="card">
+      <div className="border-b border-slate-100 p-4">
+        <h2 className="font-semibold">Part categories</h2>
+        <p className="mt-0.5 text-sm text-ink-soft">
+          {categories.data?.length ?? 0} in the tree. Deleting one needs it empty of parts and
+          sub-categories.
+        </p>
+      </div>
+
+      <form
+        className="space-y-3 border-b border-slate-100 bg-slate-50 p-4"
+        onSubmit={(e) => {
+          e.preventDefault()
+          create.mutate()
+        }}
+      >
+        <ErrorNote error={create.error} />
+        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <Field label="New category">
+            <input
+              className="field"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Wiring Harness"
+              required
+            />
+          </Field>
+          <Field label="Inside">
+            <select
+              className="field"
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+            >
+              <option value="">Top level</option>
+              {roots.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <button type="submit" className="btn-primary" disabled={create.isPending || !name.trim()}>
+            {create.isPending ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+      </form>
+
+      <ErrorNote error={remove.error} />
+
+      <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto">
+        {categories.data?.map((c) => (
+          <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-2">
+            <span className="truncate text-sm">{c.path}</span>
+            <button
+              type="button"
+              className="btn-danger !px-2 !py-1 !text-xs"
+              onClick={() => {
+                if (confirm(`Delete "${c.path}"?`)) remove.mutate(c.id)
+              }}
+            >
+              Delete
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }

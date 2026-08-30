@@ -182,18 +182,7 @@ export default function Money() {
       ) : (
         <div className="card divide-y divide-slate-100">
           {settlements.data?.map((s) => (
-            <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm">
-                  <strong>{s.from_user.full_name}</strong> paid{' '}
-                  <strong>{s.to_user.full_name}</strong>
-                </p>
-                <p className="text-xs text-ink-soft">
-                  {date(s.paid_on)} · covering {date(s.period_start)} to {date(s.period_end)}
-                </p>
-              </div>
-              <span className="font-semibold tabular-nums">{money(s.amount)}</span>
-            </div>
+            <SettlementRow key={s.id} settlement={s} canEdit={canEdit} />
           ))}
         </div>
       )}
@@ -248,6 +237,63 @@ function TransferRow({
         </button>
       )}
       <ErrorNote error={record.error} />
+    </div>
+  )
+}
+
+function SettlementRow({
+  settlement,
+  canEdit,
+}: {
+  settlement: Settlement
+  canEdit: boolean
+}) {
+  const queryClient = useQueryClient()
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/settlements/${settlement.id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settlements'] })
+      // Removing a settlement reopens the balance it closed.
+      void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
+    },
+  })
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate text-sm">
+          <strong>{settlement.from_user.full_name}</strong> paid{' '}
+          <strong>{settlement.to_user.full_name}</strong>
+        </p>
+        <p className="text-xs text-ink-soft">
+          {date(settlement.paid_on)} · covering {date(settlement.period_start)} to{' '}
+          {date(settlement.period_end)}
+        </p>
+        <ErrorNote error={remove.error} />
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="font-semibold tabular-nums">{money(settlement.amount)}</span>
+        {canEdit && (
+          <button
+            type="button"
+            className="btn-danger !px-2 !py-1 !text-xs"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (
+                confirm(
+                  'Delete this settlement? The balance it closed will reopen and show as ' +
+                    'outstanding again.',
+                )
+              ) {
+                remove.mutate()
+              }
+            }}
+          >
+            Delete
+          </button>
+        )}
+      </div>
     </div>
   )
 }

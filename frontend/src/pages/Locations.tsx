@@ -102,7 +102,29 @@ function LocationRow({
   canEdit: boolean
   onDelete: (id: number) => void
 }) {
+  const [editing, setEditing] = useState(false)
   const empty = node.part_count === 0 && node.children.length === 0
+
+  if (editing) {
+    return (
+      <>
+        <div style={{ marginLeft: `${depth * 1.25}rem` }}>
+          <EditLocation node={node} onDone={() => setEditing(false)} />
+        </div>
+        {node.children.map((child) => (
+          <LocationRow
+            key={child.id}
+            node={child}
+            depth={depth + 1}
+            selected={selected}
+            onToggle={onToggle}
+            canEdit={canEdit}
+            onDelete={onDelete}
+          />
+        ))}
+      </>
+    )
+  }
 
   return (
     <>
@@ -129,6 +151,15 @@ function LocationRow({
           >
             {node.part_count} part{node.part_count > 1 ? 's' : ''}
           </Link>
+        )}
+        {canEdit && (
+          <button
+            type="button"
+            className="btn-secondary !px-2 !py-1 !text-xs"
+            onClick={() => setEditing(true)}
+          >
+            Edit
+          </button>
         )}
         {canEdit && empty && (
           <button
@@ -232,5 +263,100 @@ function AddLocationForm({ locations }: { locations: StorageLocation[] }) {
         {create.isPending ? 'Adding…' : 'Add it'}
       </button>
     </form>
+  )
+}
+
+function EditLocation({ node, onDone }: { node: LocationNode; onDone: () => void }) {
+  const queryClient = useQueryClient()
+  const [name, setName] = useState(node.name)
+  const [kind, setKind] = useState<LocationKind>(node.kind)
+  const [parentId, setParentId] = useState(node.parent_id ? String(node.parent_id) : '')
+
+  const all = useQuery({
+    queryKey: ['locations'],
+    queryFn: () => api.get<StorageLocation[]>('/locations'),
+  })
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/locations/${node.id}`, {
+        name: name.trim(),
+        kind,
+        parent_id: parentId ? Number(parentId) : null,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['locations'] })
+      onDone()
+    },
+  })
+
+  // Moving a location under its own descendant would orphan the subtree, and
+  // the API rejects it, so do not offer it.
+  const descendantIds = new Set<number>()
+  const collect = (n: LocationNode) => {
+    descendantIds.add(n.id)
+    n.children.forEach(collect)
+  }
+  collect(node)
+
+  return (
+    <div className="card space-y-3 p-3">
+      <ErrorNote error={save.error} />
+      <p className="text-xs text-ink-soft">
+        The code stays <span className="font-mono">{node.code}</span>, so printed labels keep
+        working.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Name">
+          <input className="field" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+
+        <Field label="Kind">
+          <select
+            className="field"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as LocationKind)}
+          >
+            {KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k[0].toUpperCase() + k.slice(1)}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Inside">
+          <select
+            className="field"
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+          >
+            <option value="">Top level</option>
+            {all.data
+              ?.filter((l) => !descendantIds.has(l.id))
+              .map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.path}
+                </option>
+              ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={save.isPending || !name.trim()}
+          onClick={() => save.mutate()}
+        >
+          {save.isPending ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" className="btn-secondary" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </div>
   )
 }

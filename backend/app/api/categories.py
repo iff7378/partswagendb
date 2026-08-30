@@ -4,7 +4,7 @@ from sqlalchemy import func, select
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.models import Part, PartCategory, Tag
 from app.schemas.common import Message
-from app.schemas.part import CategoryCreate, CategoryNode, CategoryRead, TagRead
+from app.schemas.part import CategoryCreate, CategoryRead, TagRead
 
 router = APIRouter(tags=["catalog"])
 
@@ -18,22 +18,6 @@ def _slugify(name: str, parent: PartCategory | None) -> str:
 @router.get("/categories", response_model=list[CategoryRead])
 def list_categories(db: DbSession, _: CurrentUser) -> list[PartCategory]:
     return list(db.execute(select(PartCategory).order_by(PartCategory.path)).scalars())
-
-
-@router.get("/categories/tree", response_model=list[CategoryNode])
-def category_tree(db: DbSession, _: CurrentUser) -> list[CategoryNode]:
-    categories = list(db.execute(select(PartCategory).order_by(PartCategory.name)).scalars())
-    nodes = {c.id: CategoryNode.model_validate(c) for c in categories}
-
-    roots: list[CategoryNode] = []
-    for category in categories:
-        node = nodes[category.id]
-        parent = nodes.get(category.parent_id) if category.parent_id else None
-        if parent is None:
-            roots.append(node)
-        else:
-            parent.children.append(node)
-    return roots
 
 
 @router.post("/categories", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)

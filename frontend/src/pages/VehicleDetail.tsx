@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { ErrorNote, Field, PageHeader, Spinner, Stat, StatusChip } from '../components/ui'
 import { api } from '../lib/api'
@@ -31,6 +31,7 @@ const EXPENSE_CATEGORIES: ExpenseCategory[] = [
 
 export default function VehicleDetailPage() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { canEdit } = useAuth()
 
@@ -47,6 +48,14 @@ export default function VehicleDetailPage() {
   const expenses = useQuery({
     queryKey: ['expenses', 'vehicle', id],
     queryFn: () => api.get<Expense[]>(`/expenses?vehicle_id=${id}`),
+  })
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/vehicles/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      navigate('/vehicles')
+    },
   })
 
   const setStatus = useMutation({
@@ -110,6 +119,24 @@ export default function VehicleDetailPage() {
           <Row label="Acquired">{date(v.acquired_on)}</Row>
           <Row label="From">{v.acquired_from ?? '—'}</Row>
           {v.notes && <Row label="Notes">{v.notes}</Row>}
+          {canEdit && (
+            <div className="p-4">
+              <ErrorNote error={remove.error} />
+              <button
+                type="button"
+                className="btn-danger w-full"
+                disabled={remove.isPending}
+                onClick={() => {
+                  if (confirm(`Delete ${v.display_name}? Its expenses go with it.`)) remove.mutate()
+                }}
+              >
+                Delete this car
+              </button>
+              <p className="mt-2 text-center text-xs text-ink-soft">
+                Only possible once no parts reference it.
+              </p>
+            </div>
+          )}
         </section>
 
         <section>
@@ -122,15 +149,7 @@ export default function VehicleDetailPage() {
             )}
             <ul className="divide-y divide-slate-100">
               {expenses.data?.map((expense) => (
-                <li key={expense.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{expense.description}</p>
-                    <p className="text-xs text-ink-soft">
-                      {date(expense.incurred_on)} · paid by {expense.paid_by.full_name}
-                    </p>
-                  </div>
-                  <span className="font-semibold tabular-nums">{money(expense.amount)}</span>
-                </li>
+                <ExpenseRow key={expense.id} expense={expense} canEdit={canEdit} />
               ))}
             </ul>
           </div>
@@ -210,6 +229,7 @@ function AddExpenseForm({ vehicleId }: { vehicleId: number }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['expenses'] })
       void queryClient.invalidateQueries({ queryKey: ['vehicle'] })
+      void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
       setForm((prev) => ({ ...prev, description: '', amount: '' }))
       setOpen(false)
     },
@@ -302,5 +322,140 @@ function AddExpenseForm({ vehicleId }: { vehicleId: number }) {
         </button>
       </div>
     </form>
+  )
+}
+
+function ExpenseRow({ expense, canEdit }: { expense: Expense; canEdit: boolean }) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({
+    description: expense.description,
+    amount: expense.amount,
+    incurred_on: expense.incurred_on,
+    paid_by_id: String(expense.paid_by_id),
+  })
+
+  const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<User[]>('/users') })
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ['expenses'] })
+    void queryClient.invalidateQueries({ queryKey: ['vehicle'] })
+    // Who paid drives the settle-up split, so the report is now stale.
+    void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
+  }
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/expenses/${expense.id}`, {
+        description: form.description.trim(),
+        amount: form.amount,
+        incurred_on: form.incurred_on,
+        paid_by_id: Number(form.paid_by_id),
+      }),
+    onSuccess: () => {
+      refresh()
+      setEditing(false)
+    },
+  })
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/expenses/${expense.id}`),
+    onSuccess: refresh,
+  })
+
+  if (!editing) {
+    return (
+      <li className="flex items-center justify-between gap-3 px-4 py-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{expense.description}</p>
+          <p className="text-xs text-ink-soft">
+            {date(expense.incurred_on)} · paid by {expense.paid_by.full_name}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold tabular-nums">{money(expense.amount)}</span>
+          {canEdit && (
+            <button
+              type="button"
+              className="btn-secondary !px-2 !py-1 !text-xs"
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </button>
+          )}
+        </div>
+      </li>
+    )
+  }
+
+  return (
+    <li className="space-y-3 bg-slate-50 px-4 py-3">
+      <ErrorNote error={save.error ?? remove.error} />
+
+      <Field label="What was it for">
+        <input
+          className="field"
+          value={form.description}
+          onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+        />
+      </Field>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Amount">
+          <input
+            className="field"
+            inputMode="decimal"
+            value={form.amount}
+            onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+          />
+        </Field>
+        <Field label="Date">
+          <input
+            type="date"
+            className="field"
+            value={form.incurred_on}
+            onChange={(e) => setForm((p) => ({ ...p, incurred_on: e.target.value }))}
+          />
+        </Field>
+        <Field label="Who paid">
+          <select
+            className="field"
+            value={form.paid_by_id}
+            onChange={(e) => setForm((p) => ({ ...p, paid_by_id: e.target.value }))}
+          >
+            {users.data?.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={save.isPending}
+          onClick={() => save.mutate()}
+        >
+          {save.isPending ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn-danger ml-auto"
+          onClick={() => {
+            if (confirm(`Delete "${expense.description}"? This changes the settle-up report.`)) {
+              remove.mutate()
+            }
+          }}
+        >
+          Delete
+        </button>
+      </div>
+    </li>
   )
 }

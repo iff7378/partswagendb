@@ -5,7 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { EmptyState, ErrorNote, PageHeader, Spinner, StatusChip } from '../components/ui'
 import { api, download } from '../lib/api'
 import { CONDITION_LABELS, money } from '../lib/format'
-import type { Category, Page, Part, StorageLocation, Vehicle } from '../lib/types'
+import type { Category, Page, Part, StorageLocation, Tag, Vehicle } from '../lib/types'
 
 const STATUSES = ['available', 'draft', 'reserved', 'sold', 'scrapped'] as const
 
@@ -31,6 +31,7 @@ export default function Parts() {
     queryKey: ['categories'],
     queryFn: () => api.get<Category[]>('/categories'),
   })
+  const tags = useQuery({ queryKey: ['tags'], queryFn: () => api.get<Tag[]>('/tags') })
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(params)
@@ -132,6 +133,29 @@ export default function Parts() {
             ))}
           </select>
         </div>
+
+        {(tags.data?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-sm text-ink-soft">Tags:</span>
+            {tags.data?.map((t) => {
+              const active = params.get('tag') === t.name
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setParam('tag', active ? '' : t.name)}
+                  className={`chip transition ${
+                    active
+                      ? 'bg-rust text-white ring-rust'
+                      : 'bg-slate-100 text-ink-soft ring-slate-200 hover:bg-slate-200'
+                  }`}
+                >
+                  {t.name}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         <label className="flex items-center gap-2 text-sm text-ink-soft">
           <input
