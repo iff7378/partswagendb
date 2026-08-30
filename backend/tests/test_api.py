@@ -336,3 +336,30 @@ def test_dashboard_counts_inventory(client: TestClient, auth_headers) -> None:
     assert stats["parts_draft"] == 1
     assert stats["parts_available"] == 1
     assert stats["inventory_asking_value"] == "50.00"
+
+
+def test_deleting_a_part_removes_its_photos_from_object_storage(
+    client: TestClient, db: Session, auth_headers, monkeypatch
+) -> None:
+    """The photo rows cascade away with the part, but object storage does not
+    know that, so the files must be deleted explicitly or they are orphaned."""
+    from app.api import parts as parts_api
+    from app.models import Photo
+
+    deleted: list[str] = []
+    monkeypatch.setattr(parts_api, "delete_object", deleted.append)
+
+    part = client.post("/api/parts", headers=auth_headers, json={"title": "Alternator"}).json()
+    db.add(
+        Photo(
+            part_id=part["id"],
+            object_key="parts/1/abc.jpg",
+            thumbnail_key="parts/1/abc_thumb.jpg",
+            content_type="image/jpeg",
+            size_bytes=123,
+        )
+    )
+    db.commit()
+
+    assert client.delete(f"/api/parts/{part['id']}", headers=auth_headers).status_code == 200
+    assert sorted(deleted) == ["parts/1/abc.jpg", "parts/1/abc_thumb.jpg"]

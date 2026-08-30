@@ -8,7 +8,7 @@ from app.models import Location, Part, PartCategory, Tag, Vehicle
 from app.schemas.common import Message, Page
 from app.schemas.part import PartCreate, PartDetail, PartMove, PartRead, PartUpdate
 from app.services.identifiers import next_part_sku
-from app.services.storage import presigned_url
+from app.services.storage import delete_object, presigned_url
 
 router = APIRouter(prefix="/parts", tags=["parts"])
 
@@ -223,6 +223,15 @@ def delete_part(db: DbSession, _: RequireEditor, part_id: int) -> Message:
         )
 
     sku = part.sku
+
+    # Deleting the part cascades its photo rows, but object storage knows
+    # nothing about that, so the files have to go explicitly or they are
+    # orphaned in the bucket with no row left pointing at them.
+    for photo in part.photos:
+        delete_object(photo.object_key)
+        if photo.thumbnail_key:
+            delete_object(photo.thumbnail_key)
+
     db.delete(part)
     db.commit()
     return Message(detail=f"Deleted part {sku}")
