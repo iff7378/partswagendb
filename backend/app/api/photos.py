@@ -62,14 +62,24 @@ async def upload_part_photo(
             detail=f"Image exceeds the {settings.max_upload_bytes // (1024 * 1024)}MB limit",
         )
 
-    key = storage.build_object_key(f"parts/{part_id}", file.filename or "photo.jpg")
-    storage.upload_bytes(key, data, content_type)
+    # OCR reads the bytes as uploaded; only what gets stored is downscaled.
+    width: int | None = None
+    height: int | None = None
+    stored = storage.normalise_original(data)
+    if stored:
+        stored_bytes, width, height = stored
+        stored_type = "image/jpeg"
+        key = storage.build_object_key(f"parts/{part_id}", "photo.jpg")
+    else:
+        stored_bytes, stored_type = data, content_type
+        key = storage.build_object_key(f"parts/{part_id}", file.filename or "photo.jpg")
+
+    storage.upload_bytes(key, stored_bytes, stored_type)
 
     thumbnail_key = None
-    width = height = None
-    thumbnail = storage.make_thumbnail(data)
+    thumbnail = storage.make_thumbnail(stored_bytes)
     if thumbnail:
-        thumb_bytes, width, height = thumbnail
+        thumb_bytes, _, _ = thumbnail
         thumbnail_key = f"{key.rsplit('.', 1)[0]}_thumb.jpg"
         storage.upload_bytes(thumbnail_key, thumb_bytes, "image/jpeg")
 
@@ -80,8 +90,8 @@ async def upload_part_photo(
         object_key=key,
         thumbnail_key=thumbnail_key,
         original_filename=file.filename,
-        content_type=content_type,
-        size_bytes=len(data),
+        content_type=stored_type,
+        size_bytes=len(stored_bytes),
         width=width,
         height=height,
         is_primary=not has_photos,

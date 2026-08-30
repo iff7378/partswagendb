@@ -43,6 +43,8 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = 25 * 1024 * 1024
     thumbnail_max_px: int = 512
+    # Long edge originals are stored at; uploads above this are downscaled.
+    original_max_px: int = 2048
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -101,3 +101,34 @@ def test_preprocessing_does_not_sharpen() -> None:
     from app.services import ocr
 
     assert "ImageFilter" not in inspect.getsource(ocr)
+
+
+def test_stored_originals_are_capped_but_never_upscaled() -> None:
+    """Storage keeps a 2048px version, which is plenty for viewing and cuts
+    disk roughly fourfold against a 12MP original."""
+    import io
+
+    from PIL import Image
+
+    from app.config import settings
+    from app.services.storage import normalise_original
+
+    def encode(size: tuple[int, int]) -> bytes:
+        buffer = io.BytesIO()
+        Image.new("RGB", size, "white").save(buffer, format="JPEG")
+        return buffer.getvalue()
+
+    big = normalise_original(encode((4032, 3024)))
+    assert big is not None
+    _, width, height = big
+    assert (width, height) == (settings.original_max_px, 1536)
+
+    small = normalise_original(encode((800, 600)))
+    assert small is not None
+    assert small[1:] == (800, 600)
+
+
+def test_unreadable_upload_falls_back_to_storing_it_untouched() -> None:
+    from app.services.storage import normalise_original
+
+    assert normalise_original(b"this is not an image") is None

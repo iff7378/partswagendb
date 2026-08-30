@@ -86,6 +86,34 @@ def presigned_url(key: str | None) -> str | None:
     return url
 
 
+def normalise_original(data: bytes) -> tuple[bytes, int, int] | None:
+    """Re-encode an upload to the largest size worth keeping.
+
+    Returns (jpeg_bytes, width, height) at the stored size, or None if the image
+    cannot be read, in which case the caller should store the bytes untouched.
+
+    A phone shoots 12MP, but nothing here needs it: OCR runs at 1600px and the
+    UI shows a thumbnail or a detail view. Capping the long edge at 2048px costs
+    nothing visible and cuts storage roughly fourfold. Orientation is baked into
+    the pixels at the same time, so the EXIF tag is no longer load-bearing.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as opened:
+            image = ImageOps.exif_transpose(opened).convert("RGB")
+            # Only ever shrink: upscaling a small photo just wastes space.
+            if max(image.size) > settings.original_max_px:
+                image.thumbnail(
+                    (settings.original_max_px, settings.original_max_px),
+                    Image.Resampling.LANCZOS,
+                )
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=88, optimize=True)
+            return buffer.getvalue(), image.width, image.height
+    except (UnidentifiedImageError, OSError):
+        logger.warning("Could not re-encode upload, storing it as-is", exc_info=True)
+        return None
+
+
 def make_thumbnail(data: bytes) -> tuple[bytes, int, int] | None:
     """Return (jpeg_bytes, original_width, original_height), or None if unreadable."""
     try:
