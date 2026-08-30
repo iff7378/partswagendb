@@ -300,6 +300,8 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ['sales'] })
+    // Needed so an edit shows immediately. Harmless after a void, because the
+    // query is disabled by then and a disabled query does not refetch.
     void queryClient.invalidateQueries({ queryKey: ['sale', sale.id] })
     void queryClient.invalidateQueries({ queryKey: ['parts'] })
     void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
@@ -308,7 +310,13 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
 
   const voidSale = useMutation({
     mutationFn: () => api.delete(`/sales/${sale.id}`),
-    onSuccess: refresh,
+    onSuccess: () => {
+      // Collapse first: leaving the row open would refetch a sale that no
+      // longer exists and surface a 404.
+      setOpen(false)
+      queryClient.removeQueries({ queryKey: ['sale', sale.id] })
+      refresh()
+    },
   })
 
   return (
