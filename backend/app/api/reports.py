@@ -53,7 +53,7 @@ def dashboard(db: DbSession, _: CurrentUser) -> DashboardStats:
         select(func.sum(SaleItem.unit_price * SaleItem.quantity))
         .select_from(SaleItem)
         .join(Sale, Sale.id == SaleItem.sale_id)
-        .where(Sale.sold_on >= cutoff)
+        .where(Sale.paid_on.is_not(None), Sale.paid_on >= cutoff)
     ).scalar_one_or_none()
 
     expenses = db.execute(
@@ -240,7 +240,12 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
         vehicle_id: amount
         for vehicle_id, amount in db.execute(
             select(SaleItem.vehicle_id, func.sum(line_total))
-            .where(SaleItem.vehicle_id.is_not(None), SaleItem.is_shell.is_(True))
+            .join(Sale, Sale.id == SaleItem.sale_id)
+            .where(
+                SaleItem.vehicle_id.is_not(None),
+                SaleItem.is_shell.is_(True),
+                Sale.paid_on.is_not(None),
+            )
             .group_by(SaleItem.vehicle_id)
         ).all()
         if vehicle_id is not None

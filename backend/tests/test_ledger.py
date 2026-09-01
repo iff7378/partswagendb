@@ -34,6 +34,10 @@ def add_sale(
     sale = Sale(
         reference=reference or f"S-{user_id}-{amount}-{when}",
         sold_on=when,
+        # Revenue counts on the day the money landed, so the helper builds
+        # sales that have actually been paid for.
+        paid_on=when,
+        fulfilled_on=when,
         collected_by_id=user_id,
         fees=Decimal(fees),
     )
@@ -226,7 +230,13 @@ def test_sold_parts_do_not_break_revenue_attribution(db: Session, make_user) -> 
     db.add(part)
     db.commit()
 
-    sale = Sale(reference="S26-0001", sold_on=PERIOD_END, collected_by_id=partner.id)
+    sale = Sale(
+        reference="S26-0001",
+        sold_on=PERIOD_END,
+        paid_on=PERIOD_END,
+        fulfilled_on=PERIOD_END,
+        collected_by_id=partner.id,
+    )
     sale.items.append(
         SaleItem(parts=[part], description="Alternator", quantity=2, unit_price=Decimal("75.00"))
     )

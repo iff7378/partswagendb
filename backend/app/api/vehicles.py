@@ -4,7 +4,7 @@ from sqlalchemy import and_, func, or_, select
 from app.config import settings
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.enums import PartStatus
-from app.models import Part, SaleItem, Vehicle, VehicleExpense
+from app.models import Part, Sale, SaleItem, Vehicle, VehicleExpense
 from app.schemas.common import Message, Page
 from app.schemas.vehicle import (
     VehicleCreate,
@@ -195,21 +195,30 @@ def get_vehicle(db: DbSession, _: CurrentUser, vehicle_id: int) -> VehicleDetail
     line_total = func.sum(SaleItem.unit_price * SaleItem.quantity)
     attributed = (
         select(SaleItem.id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
         .outerjoin(SaleItem.parts)
         .where(
+            # Only money that has actually landed, matching the ledger.
+            Sale.paid_on.is_not(None),
             or_(
                 SaleItem.vehicle_id == vehicle_id,
                 # A line naming a car has already been counted by that car, so
                 # its parts must not drag it onto a second one.
                 and_(SaleItem.vehicle_id.is_(None), Part.vehicle_id == vehicle_id),
-            )
+            ),
         )
         .distinct()
     )
     revenue = db.execute(select(line_total).where(SaleItem.id.in_(attributed))).scalar_one_or_none()
 
     scrap = db.execute(
-        select(line_total).where(SaleItem.vehicle_id == vehicle_id, SaleItem.is_shell.is_(True))
+        select(line_total)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(
+            Sale.paid_on.is_not(None),
+            SaleItem.vehicle_id == vehicle_id,
+            SaleItem.is_shell.is_(True),
+        )
     ).scalar_one_or_none()
 
     total_expenses = money(expenses) if expenses else ZERO

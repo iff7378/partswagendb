@@ -6,7 +6,7 @@ from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, Numeric, Stri
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.enums import SaleChannel
+from app.enums import SaleChannel, SaleState
 from app.models.base import TimestampMixin
 
 if TYPE_CHECKING:
@@ -24,14 +24,18 @@ sale_item_parts = Table(
 
 
 class Sale(Base, TimestampMixin):
-    """A completed sale of one or more parts."""
+    """A sale, from the handshake through to the money landing."""
 
     __tablename__ = "sales"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     reference: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
 
+    # When it was agreed. The two dates below are what actually move things:
+    # paid_on puts the money on the ledger, fulfilled_on takes the stock away.
     sold_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    paid_on: Mapped[date | None] = mapped_column(Date, index=True)
+    fulfilled_on: Mapped[date | None] = mapped_column(Date, index=True)
     channel: Mapped[SaleChannel] = mapped_column(
         String(16), default=SaleChannel.LOCAL, nullable=False
     )
@@ -57,6 +61,16 @@ class Sale(Base, TimestampMixin):
     items: Mapped[list["SaleItem"]] = relationship(
         back_populates="sale", cascade="all, delete-orphan"
     )
+
+    @property
+    def state(self) -> SaleState:
+        if self.paid_on and self.fulfilled_on:
+            return SaleState.COMPLETE
+        if self.paid_on:
+            return SaleState.PAID
+        if self.fulfilled_on:
+            return SaleState.GONE
+        return SaleState.PENDING
 
     @property
     def subtotal(self) -> Decimal:

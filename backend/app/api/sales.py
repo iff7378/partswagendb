@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import CurrentUser, DbSession, RequireEditor
-from app.enums import PartStatus, VehicleStatus
+from app.enums import PartStatus, SaleState, VehicleStatus
 from app.models import Part, Sale, SaleItem, User, Vehicle
 from app.schemas.common import Message, Page
 from app.schemas.sale import SaleCreate, SaleDetail, SaleItemCreate, SaleRead, SaleUpdate
@@ -20,6 +20,13 @@ _LOADERS = (
 # Where a part goes back to when it comes off a sale. Draft is deliberately not
 # restored: by the time something has been sold it is a real part, not a stub.
 RETURNED_STATUS = PartStatus.AVAILABLE
+
+_STATE_FILTERS = {
+    SaleState.PENDING: (Sale.paid_on.is_(None), Sale.fulfilled_on.is_(None)),
+    SaleState.PAID: (Sale.paid_on.is_not(None), Sale.fulfilled_on.is_(None)),
+    SaleState.GONE: (Sale.paid_on.is_(None), Sale.fulfilled_on.is_not(None)),
+    SaleState.COMPLETE: (Sale.paid_on.is_not(None), Sale.fulfilled_on.is_not(None)),
+}
 
 
 def _get_or_404(db: Session, sale_id: int) -> Sale:
@@ -77,7 +84,6 @@ def _build_line(db: Session, line: SaleItemCreate, sale_id: int | None) -> SaleI
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"{part.sku} is already on sale {clash}",
             )
-        part.status = PartStatus.SOLD
         parts.append(part)
 
     vehicle = None
@@ -108,7 +114,6 @@ def _build_line(db: Session, line: SaleItemCreate, sale_id: int | None) -> SaleI
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"{vehicle.display_name} was already scrapped on sale {already}",
             )
-        vehicle.status = VehicleStatus.SCRAPPED
 
     description = line.description
     if not description and len(parts) == 1:
@@ -133,14 +138,35 @@ def _build_line(db: Session, line: SaleItemCreate, sale_id: int | None) -> SaleI
         unit_price=line.unit_price,
     )
     item.parts = parts
+    # Set the relationship, not just the id: _apply_state runs before the flush
+    # that would populate it, and would otherwise see no car to scrap.
+    item.vehicle = vehicle
     return item
+
+
+def _apply_state(sale: Sale) -> None:
+    """Push the sale's state onto the stock it covers.
+
+    Agreed but not handed over means reserved: the part is spoken for and must
+    not be sold twice, but it is still on the shelf. Handover is what makes it
+    sold, and what sends a shell to the yard.
+    """
+    gone = sale.fulfilled_on is not None
+    for item in sale.items:
+        for part in item.parts:
+            part.status = PartStatus.SOLD if gone else PartStatus.RESERVED
+        if item.is_shell and item.vehicle is not None:
+            if gone:
+                item.vehicle.status = VehicleStatus.SCRAPPED
+            elif item.vehicle.status == VehicleStatus.SCRAPPED:
+                item.vehicle.status = VehicleStatus.STRIPPED
 
 
 def _release(sale: Sale) -> None:
     """Give back everything a sale is holding, before it is voided or rewritten."""
     for item in sale.items:
         for part in item.parts:
-            if part.status == PartStatus.SOLD:
+            if part.status in (PartStatus.SOLD, PartStatus.RESERVED):
                 part.status = RETURNED_STATUS
         # The shell never went to the yard after all, so it is back to being a
         # stripped car sitting on the property.
@@ -157,12 +183,17 @@ def list_sales(
     db: DbSession,
     _: CurrentUser,
     collected_by_id: int | None = None,
+    state: SaleState | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ) -> Page[SaleRead]:
     query = select(Sale).options(*_LOADERS)
     if collected_by_id is not None:
         query = query.where(Sale.collected_by_id == collected_by_id)
+    if state is not None:
+        # The state is derived from two dates, so it is filtered the same way
+        # rather than being stored and risking drift.
+        query = query.where(*_STATE_FILTERS[state])
 
     total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
     rows = db.execute(
@@ -189,6 +220,7 @@ def create_sale(db: DbSession, user: RequireEditor, payload: SaleCreate) -> Sale
     for line in payload.items:
         sale.items.append(_build_line(db, line, sale_id=None))
 
+    _apply_state(sale)
     db.add(sale)
     db.commit()
     return _to_detail(_get_or_404(db, sale.id))
@@ -227,6 +259,9 @@ def update_sale(db: DbSession, _: RequireEditor, sale_id: int, payload: SaleUpda
         for line in items:
             sale.items.append(_build_line(db, SaleItemCreate.model_validate(line), sale_id=sale.id))
 
+    # Runs whether the lines or the dates changed: marking a sale collected is
+    # what turns a reservation into a sale, and un-marking it reverses that.
+    _apply_state(sale)
     db.commit()
     return _to_detail(_get_or_404(db, sale_id))
 

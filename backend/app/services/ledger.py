@@ -30,7 +30,12 @@ def _expenses_by_user(db: Session, start: date, end: date) -> dict[int, Decimal]
 
 
 def _revenue_by_user(db: Session, start: date, end: date) -> dict[int, Decimal]:
-    """Net cash each collector took in: line totals plus shipping and tax, less fees."""
+    """Net cash each collector took in: line totals plus shipping and tax, less fees.
+
+    Counted on the day the money landed, not the day the deal was agreed. A
+    sale that is still owed for is not cash anyone is holding, so it cannot
+    change who owes whom.
+    """
     item_totals = (
         select(
             SaleItem.sale_id.label("sale_id"),
@@ -48,7 +53,7 @@ def _revenue_by_user(db: Session, start: date, end: date) -> dict[int, Decimal]:
             ),
         )
         .outerjoin(item_totals, item_totals.c.sale_id == Sale.id)
-        .where(Sale.sold_on >= start, Sale.sold_on <= end)
+        .where(Sale.paid_on.is_not(None), Sale.paid_on >= start, Sale.paid_on <= end)
         .group_by(Sale.collected_by_id)
     ).all()
     return {user_id: money(total) for user_id, total in rows}

@@ -69,6 +69,20 @@ class SaleChannel(StrEnum):
     OTHER = "other"
 
 
+class SaleState(StrEnum):
+    """Where a sale has got to.
+
+    Payment and handover are separate facts, not one queue: a part can be paid
+    for online and collected next week, or handed over on trust and paid on
+    Friday. The state is derived from which of the two dates are set.
+    """
+
+    PENDING = "pending"
+    PAID = "paid"
+    GONE = "gone"
+    COMPLETE = "complete"
+
+
 class OcrStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"

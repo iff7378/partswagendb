@@ -212,6 +212,8 @@ def test_selling_a_part_marks_it_sold(client: TestClient, auth_headers, admin) -
         headers=auth_headers,
         json={
             "sold_on": "2026-08-15",
+            "paid_on": "2026-08-15",
+            "fulfilled_on": "2026-08-15",
             "collected_by_id": admin.id,
             "items": [{"part_ids": [part["id"]], "unit_price": "85.00", "quantity": 1}],
         },
@@ -231,6 +233,8 @@ def test_a_part_cannot_be_sold_twice(client: TestClient, auth_headers, admin) ->
     ).json()
     payload = {
         "sold_on": "2026-08-15",
+        "paid_on": "2026-08-15",
+        "fulfilled_on": "2026-08-15",
         "collected_by_id": admin.id,
         "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
     }
@@ -249,6 +253,8 @@ def test_voiding_a_sale_returns_the_part_to_stock(client: TestClient, auth_heade
         headers=auth_headers,
         json={
             "sold_on": "2026-08-15",
+            "paid_on": "2026-08-15",
+            "fulfilled_on": "2026-08-15",
             "collected_by_id": admin.id,
             "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
         },
@@ -265,6 +271,8 @@ def test_sale_line_needs_a_part_or_a_description(client: TestClient, auth_header
         headers=auth_headers,
         json={
             "sold_on": "2026-08-15",
+            "paid_on": "2026-08-15",
+            "fulfilled_on": "2026-08-15",
             "collected_by_id": admin.id,
             "items": [{"unit_price": "10.00"}],
         },
@@ -298,6 +306,8 @@ def test_scrapping_a_car_records_revenue_against_it(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "channel": "scrap",
             "buyer_name": "Ace Metals",
             "collected_by_id": admin.id,
@@ -322,6 +332,8 @@ def test_a_car_cannot_be_scrapped_twice(client: TestClient, auth_headers, admin)
     car = _car(client, auth_headers)
     payload = {
         "sold_on": "2026-08-20",
+        "paid_on": "2026-08-20",
+        "fulfilled_on": "2026-08-20",
         "collected_by_id": admin.id,
         "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
     }
@@ -339,6 +351,8 @@ def test_voiding_a_scrap_sale_puts_the_car_back_to_stripped(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
         },
@@ -361,6 +375,8 @@ def test_a_scrapped_shell_line_cannot_also_list_parts(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [
                 {
@@ -390,6 +406,8 @@ def test_scrap_revenue_is_separate_from_parts_revenue(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-18",
+            "paid_on": "2026-08-18",
+            "fulfilled_on": "2026-08-18",
             "collected_by_id": admin.id,
             "items": [
                 {"part_ids": [part["id"]], "unit_price": "85.00"},
@@ -628,6 +646,8 @@ def test_a_lot_sells_several_parts_for_one_price(client: TestClient, auth_header
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [
                 {
@@ -667,6 +687,8 @@ def test_a_lot_can_name_a_car_without_listing_parts(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [
                 {
@@ -705,6 +727,8 @@ def test_a_part_on_a_sale_cannot_be_put_back_by_hand(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
         },
@@ -729,6 +753,8 @@ def test_editing_a_sale_frees_dropped_parts_and_claims_new_ones(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [{"part_ids": [kept["id"], dropped["id"]], "unit_price": "150.00"}],
         },
@@ -762,6 +788,8 @@ def test_a_part_cannot_be_on_two_sales(client: TestClient, auth_headers, admin) 
     part = _part(client, auth_headers, "Alternator", status="available")
     payload = {
         "sold_on": "2026-08-20",
+        "paid_on": "2026-08-20",
+        "fulfilled_on": "2026-08-20",
         "collected_by_id": admin.id,
         "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
     }
@@ -869,6 +897,8 @@ def test_by_vehicle_report_matches_the_single_car_page(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [
                 {"part_ids": [part["id"]], "unit_price": "85.00"},
@@ -900,6 +930,8 @@ def test_a_lot_is_counted_once_in_the_by_vehicle_report(
         headers=auth_headers,
         json={
             "sold_on": "2026-08-20",
+            "paid_on": "2026-08-20",
+            "fulfilled_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [{"part_ids": [a["id"], b["id"]], "unit_price": "400.00"}],
         },
@@ -934,3 +966,178 @@ def test_metrics_count_what_is_there(client: TestClient, auth_headers, admin) ->
     assert m["vehicles_total"] == 1
     assert m["photos_total"] == 0 and m["photo_bytes"] == 0
     assert m["users_total"] >= 1
+
+
+def _sale(client: TestClient, auth_headers, admin, **extra) -> dict:
+    part = _part(client, auth_headers, "Alternator", status="available")
+    body = {
+        "sold_on": "2026-08-20",
+        "collected_by_id": admin.id,
+        "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        **extra,
+    }
+    response = client.post("/api/sales", headers=auth_headers, json=body)
+    assert response.status_code == 201, response.text
+    return {"sale": response.json(), "part": part}
+
+
+def _status_of(client: TestClient, auth_headers, part: dict) -> str:
+    return client.get(f"/api/parts/{part['id']}", headers=auth_headers).json()["status"]
+
+
+def test_a_new_sale_is_pending_and_only_reserves_stock(
+    client: TestClient, auth_headers, admin
+) -> None:
+    made = _sale(client, auth_headers, admin)
+
+    assert made["sale"]["state"] == "pending"
+    # Spoken for, but still on the shelf.
+    assert _status_of(client, auth_headers, made["part"]) == "reserved"
+
+    # Nothing is owed to anyone yet, because no money has landed.
+    report = client.get(
+        "/api/settle-up?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+    ).json()
+    assert report["total_revenue"] == "0.00"
+
+
+def test_marking_a_sale_paid_puts_it_on_the_ledger(client: TestClient, auth_headers, admin) -> None:
+    made = _sale(client, auth_headers, admin)
+
+    updated = client.patch(
+        f"/api/sales/{made['sale']['id']}", headers=auth_headers, json={"paid_on": "2026-08-22"}
+    ).json()
+    assert updated["state"] == "paid"
+
+    report = client.get(
+        "/api/settle-up?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+    ).json()
+    assert report["total_revenue"] == "85.00"
+
+    # Paid for but not collected: the part has not left the shelf.
+    assert _status_of(client, auth_headers, made["part"]) == "reserved"
+
+
+def test_handover_is_what_takes_stock_away(client: TestClient, auth_headers, admin) -> None:
+    made = _sale(client, auth_headers, admin)
+
+    updated = client.patch(
+        f"/api/sales/{made['sale']['id']}",
+        headers=auth_headers,
+        json={"fulfilled_on": "2026-08-21"},
+    ).json()
+    # Gone but still owed for.
+    assert updated["state"] == "gone"
+    assert _status_of(client, auth_headers, made["part"]) == "sold"
+
+    report = client.get(
+        "/api/settle-up?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+    ).json()
+    assert report["total_revenue"] == "0.00"
+
+
+def test_a_sale_can_be_recorded_already_complete(client: TestClient, auth_headers, admin) -> None:
+    made = _sale(client, auth_headers, admin, paid_on="2026-08-20", fulfilled_on="2026-08-20")
+    assert made["sale"]["state"] == "complete"
+    assert _status_of(client, auth_headers, made["part"]) == "sold"
+
+
+def test_unmarking_handover_puts_the_part_back_on_the_shelf(
+    client: TestClient, auth_headers, admin
+) -> None:
+    made = _sale(client, auth_headers, admin, fulfilled_on="2026-08-21")
+    assert _status_of(client, auth_headers, made["part"]) == "sold"
+
+    client.patch(
+        f"/api/sales/{made['sale']['id']}", headers=auth_headers, json={"fulfilled_on": None}
+    )
+    # Back to reserved rather than available: the sale still stands.
+    assert _status_of(client, auth_headers, made["part"]) == "reserved"
+
+
+def test_a_reserved_part_cannot_be_sold_again(client: TestClient, auth_headers, admin) -> None:
+    made = _sale(client, auth_headers, admin)
+
+    second = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-21",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [made["part"]["id"]], "unit_price": "90.00"}],
+        },
+    )
+    assert second.status_code == 409
+
+
+def test_voiding_a_pending_sale_frees_the_part(client: TestClient, auth_headers, admin) -> None:
+    made = _sale(client, auth_headers, admin)
+    assert (
+        client.delete(f"/api/sales/{made['sale']['id']}", headers=auth_headers).status_code == 200
+    )
+    assert _status_of(client, auth_headers, made["part"]) == "available"
+
+
+def test_a_shell_only_scraps_the_car_once_it_has_gone(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers)
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
+        },
+    ).json()
+
+    def car_status() -> str:
+        return client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()["status"]
+
+    # Agreed with the yard, but the shell is still on the property.
+    assert car_status() != "scrapped"
+
+    client.patch(
+        f"/api/sales/{sale['id']}", headers=auth_headers, json={"fulfilled_on": "2026-08-25"}
+    )
+    assert car_status() == "scrapped"
+
+
+def test_sales_can_be_filtered_by_state(client: TestClient, auth_headers, admin) -> None:
+    _sale(client, auth_headers, admin)
+    _sale(client, auth_headers, admin, paid_on="2026-08-20", fulfilled_on="2026-08-20")
+
+    def refs(state: str) -> int:
+        return client.get(f"/api/sales?state={state}", headers=auth_headers).json()["total"]
+
+    assert refs("pending") == 1
+    assert refs("complete") == 1
+    assert refs("gone") == 0
+
+
+def test_unpaid_sales_stay_out_of_a_cars_return(client: TestClient, auth_headers, admin) -> None:
+    car = _car(client, auth_headers)
+    part = _part(client, auth_headers, "Alternator", vehicle_id=car["id"], status="available")
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    ).json()
+
+    def revenue() -> str:
+        return client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()[
+            "total_revenue"
+        ]
+
+    assert revenue() == "0.00"
+    client.patch(f"/api/sales/{sale['id']}", headers=auth_headers, json={"paid_on": "2026-08-22"})
+    assert revenue() == "85.00"
+
+    report = client.get("/api/reports/by-vehicle", headers=auth_headers).json()
+    row = next(v for v in report["vehicles"] if v["id"] == car["id"])
+    assert row["total_revenue"] == "85.00"

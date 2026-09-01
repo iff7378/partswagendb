@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.enums import SaleChannel
+from app.enums import SaleChannel, SaleState
 from app.schemas.common import ORMModel
 from app.schemas.user import UserBrief
 
@@ -43,6 +43,10 @@ class SaleItemRead(ORMModel):
 
 class SaleBase(BaseModel):
     sold_on: date
+    # Null until it happens. Paid puts the money on the ledger; fulfilled takes
+    # the stock off the shelf.
+    paid_on: date | None = None
+    fulfilled_on: date | None = None
     channel: SaleChannel = SaleChannel.LOCAL
     buyer_name: str | None = None
     buyer_contact: str | None = None
@@ -60,6 +64,9 @@ class SaleCreate(SaleBase):
 
 class SaleUpdate(BaseModel):
     sold_on: date | None = None
+    # Explicit null clears these, which is how a mis-marked sale is undone.
+    paid_on: date | None = None
+    fulfilled_on: date | None = None
     channel: SaleChannel | None = None
     buyer_name: str | None = None
     buyer_contact: str | None = None
@@ -77,6 +84,7 @@ class SaleUpdate(BaseModel):
 class SaleRead(SaleBase, ORMModel):
     id: int
     reference: str
+    state: SaleState
     subtotal: Decimal
     net_collected: Decimal
     collected_by: UserBrief
