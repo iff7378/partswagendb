@@ -11,6 +11,7 @@ import PartDetailPage from './pages/PartDetail'
 import PartNew from './pages/PartNew'
 import Parts from './pages/Parts'
 import Sales from './pages/Sales'
+import Help from './pages/Help'
 import Settings from './pages/Settings'
 import Locations from './pages/Locations'
 import VehicleDetailPage from './pages/VehicleDetail'
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/sales" element={<Sales />} />
         <Route path="/money" element={<Money />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/help" element={<Help />} />
         <Route
           path="/scan"
           element={

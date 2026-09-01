@@ -12,6 +12,8 @@ export type ExpenseCategory =
   | 'disposal'
   | 'storage'
   | 'fees'
+  | 'supplies'
+  | 'meals'
   | 'other'
 
 export interface UserBrief {
@@ -278,4 +280,46 @@ export interface DashboardStats {
   revenue_last_30_days: string
   expenses_last_30_days: string
   inventory_asking_value: string
+}
+
+export interface VehicleResult {
+  id: number
+  stock_number: string
+  display_name: string
+  status: VehicleStatus
+  acquired_on: string | null
+  parts_total: number
+  parts_sold: number
+  total_expenses: string
+  total_revenue: string
+  scrap_revenue: string
+  profit: string
+}
+
+export interface VehicleResults {
+  vehicles: VehicleResult[]
+  /** Overheads belonging to no car, which is why the rows never sum to profit. */
+  general_expenses: string
+}
+
+export interface AppMetrics {
+  parts_by_status: Record<string, number>
+  parts_total: number
+  vehicles_by_status: Record<string, number>
+  vehicles_total: number
+  sales_total: number
+  sale_lines_total: number
+  gross_sales: string
+  expenses_total: number
+  expenses_amount: string
+  settlements_total: number
+  photos_total: number
+  photo_bytes: number
+  largest_photo_bytes: number
+  users_total: number
+  users_active: number
+  locations_total: number
+  categories_total: number
+  tags_total: number
+  database_bytes: number | null
 }

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
+import GeneralExpenses from '../components/GeneralExpenses'
+import VehicleResults from '../components/VehicleResults'
 import { ErrorNote, PageHeader, Spinner, Stat } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -95,6 +97,10 @@ export default function Money() {
               split below will not balance until an admin fixes the shares.
             </p>
           )}
+
+          <VehicleResults />
+
+          <GeneralExpenses />
 
           <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-ink-soft">
             Where everyone stands

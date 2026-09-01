@@ -5,7 +5,8 @@ import type { FormEvent } from 'react'
 import { ErrorNote, Field, PageHeader, Spinner } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import type { Category, User, UserRole } from '../lib/types'
+import { bytes, money } from '../lib/format'
+import type { AppMetrics, Category, User, UserRole } from '../lib/types'
 
 const ROLES: { value: UserRole; label: string; hint: string }[] = [
   { value: 'admin', label: 'Admin', hint: 'Everything, including managing people' },
@@ -24,6 +25,7 @@ export default function Settings() {
         <ChangePassword />
         {isAdmin && <People />}
         {isAdmin && <Categories />}
+        {isAdmin && <Metrics />}
       </div>
     </>
   )
@@ -549,5 +551,95 @@ function Categories() {
         ))}
       </ul>
     </section>
+  )
+}
+
+/** What the system is holding. Admin-only, because it exposes the whole shape
+ *  of the operation in one screen. */
+function Metrics() {
+  const metrics = useQuery({
+    queryKey: ['metrics'],
+    queryFn: () => api.get<AppMetrics>('/reports/metrics'),
+  })
+
+  if (metrics.isLoading) return <Spinner />
+  if (metrics.error) return <ErrorNote error={metrics.error} />
+
+  const m = metrics.data!
+  const byStatus = (counts: Record<string, number>) =>
+    Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([status, n]) => `${n} ${status}`)
+      .join(' · ') || 'none'
+
+  return (
+    <section className="card">
+      <div className="border-b border-slate-100 px-4 py-3">
+        <h2 className="font-semibold">System</h2>
+        <p className="text-sm text-ink-soft">What this install is holding right now.</p>
+      </div>
+
+      <dl className="divide-y divide-slate-100">
+        <MetricRow label="Parts" value={m.parts_total} hint={byStatus(m.parts_by_status)} />
+        <MetricRow label="Cars" value={m.vehicles_total} hint={byStatus(m.vehicles_by_status)} />
+        <MetricRow
+          label="Sales"
+          value={m.sales_total}
+          hint={`${m.sale_lines_total} lines · ${money(m.gross_sales)} before fees`}
+        />
+        <MetricRow
+          label="Recorded costs"
+          value={m.expenses_total}
+          hint={money(m.expenses_amount)}
+        />
+        <MetricRow label="Settlements" value={m.settlements_total} />
+        <MetricRow
+          label="Photos"
+          value={m.photos_total}
+          hint={
+            m.photos_total > 0
+              ? `${bytes(m.photo_bytes)} stored · largest ${bytes(m.largest_photo_bytes)}`
+              : undefined
+          }
+        />
+        {m.database_bytes !== null && (
+          <MetricRow label="Database" value={bytes(m.database_bytes)} />
+        )}
+        <MetricRow
+          label="People"
+          value={m.users_total}
+          hint={`${m.users_active} able to sign in`}
+        />
+        <MetricRow label="Storage places" value={m.locations_total} />
+        <MetricRow
+          label="Categories and tags"
+          value={`${m.categories_total} / ${m.tags_total}`}
+        />
+      </dl>
+
+      <p className="border-t border-slate-100 px-4 py-3 text-xs text-ink-soft">
+        Photo sizes are what was uploaded after resizing, and exclude thumbnails.
+      </p>
+    </section>
+  )
+}
+
+function MetricRow({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: number | string
+  hint?: string
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 px-4 py-2.5">
+      <dt className="text-sm text-ink-soft">
+        {label}
+        {hint && <span className="block text-xs">{hint}</span>}
+      </dt>
+      <dd className="text-right text-sm font-semibold tabular-nums">{value}</dd>
+    </div>
   )
 }

@@ -51,6 +51,14 @@ export default function Layout() {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
+            <NavLink
+              to="/help"
+              className="btn-secondary !px-3 !py-2"
+              title="How this works"
+              aria-label="How this works"
+            >
+              <HelpIcon />
+            </NavLink>
             <NavLink to="/scan" className="btn-secondary !px-3 !py-2" title="Scan a QR code">
               <ScanIcon />
               <span className="hidden sm:inline">Scan</span>
@@ -107,8 +115,22 @@ function VersionFooter() {
 
   return (
     <p className="mt-10 text-center text-xs text-ink-soft">
+      <NavLink to="/help" className="font-medium text-rust hover:underline">
+        How this works
+      </NavLink>
+      <span className="mx-2">·</span>
       PartsWagen {data?.version ?? '…'}
     </p>
+  )
+}
+
+function HelpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.5 2.5 0 1 1 3.2 2.4c-.6.2-1.2.8-1.2 1.6v.5" strokeLinecap="round" />
+      <path d="M12 17h.01" strokeLinecap="round" />
+    </svg>
   )
 }
 

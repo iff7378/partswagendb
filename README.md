@@ -137,3 +137,8 @@ without a toolchain on the host.
 
 Back up the `postgres-data` and `minio-data` volumes together — the database
 holds the records and MinIO holds the photos they reference.
+
+## Deploying
+
+See [docs/deploying.md](docs/deploying.md) — push, wait for the workflows,
+run the playbook from the Ansible box.

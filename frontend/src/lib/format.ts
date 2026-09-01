@@ -1,4 +1,4 @@
-import type { PartCondition, PartStatus, VehicleStatus } from './types'
+import type { ExpenseCategory, PartCondition, PartStatus, VehicleStatus } from './types'
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
@@ -95,4 +95,29 @@ export function humanAge(days: number): string {
   const months = Math.round(days / 30)
   if (months < 24) return `${months} months`
   return `${Math.round(days / 365)} years`
+}
+
+export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  purchase: 'Buying a car',
+  transport: 'Towing and transport',
+  tooling: 'Tools',
+  disposal: 'Disposal',
+  storage: 'Storage',
+  fees: 'Fees',
+  supplies: 'Supplies',
+  meals: 'Food',
+  other: 'Other',
+}
+
+/** Byte counts for humans. Metric units, because that is what disks are sold in. */
+export function bytes(value: number): string {
+  if (value < 1000) return `${value} B`
+  const units = ['kB', 'MB', 'GB', 'TB']
+  let n = value / 1000
+  let i = 0
+  while (n >= 1000 && i < units.length - 1) {
+    n /= 1000
+    i += 1
+  }
+  return `${n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`
 }
