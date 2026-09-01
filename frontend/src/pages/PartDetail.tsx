@@ -475,7 +475,10 @@ function EditForm({
           />
         </Field>
 
-        <Field label="Nag me after" hint="Flags the part once it has sat this long.">
+        <Field
+          label="Flag it if unsold after"
+          hint="It then shows up under 'Sitting too long' on the home page."
+        >
           <select
             className="field"
             value={form.age_alert_days}
