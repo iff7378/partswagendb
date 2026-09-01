@@ -2,11 +2,26 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 
+import SaleLines from '../components/SaleLines'
+import { EMPTY_LINE, subtotalOf, toPayload } from '../lib/saleLines'
+import type { Line } from '../lib/saleLines'
 import { EmptyState, ErrorNote, Field, PageHeader, Spinner } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { date, money } from '../lib/format'
-import type { Page, Part, Sale, SaleChannel, SaleDetail, User, Vehicle } from '../lib/types'
+import type { Page, Sale, SaleChannel, SaleDetail, User } from '../lib/types'
+
+/** Turn a saved sale back into editable lines. */
+function toLines(sale: SaleDetail): Line[] {
+  return sale.items.map((item) => ({
+    kind: item.is_shell ? 'shell' : item.parts.length > 0 ? 'parts' : 'other',
+    partIds: item.parts.map((p) => p.id),
+    vehicleId: item.vehicle_id ? String(item.vehicle_id) : '',
+    description: item.description,
+    unit_price: item.unit_price,
+    quantity: String(item.quantity),
+  }))
+}
 
 const CHANNELS: SaleChannel[] = ['local', 'ebay', 'facebook', 'phone', 'scrap', 'other']
 
@@ -63,16 +78,6 @@ export default function Sales() {
   )
 }
 
-interface Line {
-  /** '' for a free-text line, 'p:<id>' for a part, 'v:<id>' for a car shell. */
-  ref: string
-  description: string
-  unit_price: string
-  quantity: string
-}
-
-const EMPTY_LINE: Line = { ref: '', description: '', unit_price: '', quantity: '1' }
-
 function NewSaleForm({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
@@ -86,19 +91,10 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
   })
   const [lines, setLines] = useState<Line[]>([{ ...EMPTY_LINE }])
 
-  const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<User[]>('/users') })
-  const available = useQuery({
-    queryKey: ['parts', 'available'],
-    queryFn: () => api.get<Page<Part>>('/parts?status=available&limit=200'),
+  const users = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.get<User[]>('/users'),
   })
-  const vehicles = useQuery({
-    queryKey: ['vehicles', 'brief'],
-    queryFn: () => api.get<Page<Vehicle>>('/vehicles?limit=200'),
-  })
-
-  // A shell can only be weighed in once, so cars already scrapped are gone
-  // from the picker rather than sitting there waiting to be rejected.
-  const scrappable = vehicles.data?.items.filter((v) => v.status !== 'scrapped') ?? []
 
   const create = useMutation({
     mutationFn: () =>
@@ -110,15 +106,7 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
         shipping: form.shipping || '0',
         fees: form.fees || '0',
         tax: form.tax || '0',
-        items: lines
-          .filter((line) => line.ref || line.description.trim())
-          .map((line) => ({
-            part_id: line.ref.startsWith('p:') ? Number(line.ref.slice(2)) : null,
-            vehicle_id: line.ref.startsWith('v:') ? Number(line.ref.slice(2)) : null,
-            description: line.description.trim() || null,
-            unit_price: line.unit_price || '0',
-            quantity: Number(line.quantity) || 1,
-          })),
+        items: toPayload(lines),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['sales'] })
@@ -132,19 +120,12 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
     },
   })
 
-  function setLine(index: number, patch: Partial<Line>) {
-    setLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
-  }
-
   function onSubmit(event: FormEvent) {
     event.preventDefault()
     create.mutate()
   }
 
-  const subtotal = lines.reduce(
-    (sum, line) => sum + (Number(line.unit_price) || 0) * (Number(line.quantity) || 1),
-    0,
-  )
+  const subtotal = subtotalOf(lines)
   const net = subtotal + Number(form.shipping || 0) + Number(form.tax || 0) - Number(form.fees || 0)
 
   return (
@@ -200,85 +181,7 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
         </Field>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-sm font-semibold">What sold</p>
-        {lines.map((line, index) => (
-          <div key={index} className="grid gap-2 sm:grid-cols-[2fr_1fr_5rem_auto]">
-            <select
-              className="field"
-              value={line.ref}
-              onChange={(e) => {
-                const ref = e.target.value
-                const part = ref.startsWith('p:')
-                  ? available.data?.items.find((p) => String(p.id) === ref.slice(2))
-                  : undefined
-                setLine(index, { ref, unit_price: part?.asking_price ?? line.unit_price })
-                // Picking a shell almost always means a trip to the yard.
-                if (ref.startsWith('v:')) setForm((p) => ({ ...p, channel: 'scrap' }))
-              }}
-            >
-              <option value="">Something not in inventory</option>
-              <optgroup label="Parts in stock">
-                {available.data?.items.map((part) => (
-                  <option key={part.id} value={`p:${part.id}`}>
-                    {part.sku} · {part.title}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Whole car for scrap">
-                {scrappable.map((v) => (
-                  <option key={v.id} value={`v:${v.id}`}>
-                    {v.display_name} — shell
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-
-            {!line.ref && (
-              <input
-                className="field"
-                placeholder="Describe it"
-                value={line.description}
-                onChange={(e) => setLine(index, { description: e.target.value })}
-              />
-            )}
-
-            <input
-              className="field"
-              inputMode="decimal"
-              placeholder="Price"
-              value={line.unit_price}
-              onChange={(e) => setLine(index, { unit_price: e.target.value })}
-            />
-
-            <input
-              className="field"
-              inputMode="numeric"
-              value={line.quantity}
-              onChange={(e) => setLine(index, { quantity: e.target.value })}
-              aria-label="Quantity"
-            />
-
-            {lines.length > 1 && (
-              <button
-                type="button"
-                className="btn-danger !px-3"
-                onClick={() => setLines((prev) => prev.filter((_, i) => i !== index))}
-              >
-                Remove
-              </button>
-            )}
-          </div>
-        ))}
-
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setLines((prev) => [...prev, { ...EMPTY_LINE }])}
-        >
-          Add another line
-        </button>
-      </div>
+      <SaleLines lines={lines} onChange={setLines} />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Shipping">
@@ -392,17 +295,27 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
                   {detail.data.items.map((item) => (
                     <tr key={item.id}>
                       <td className="py-1.5">
-                        {item.part_sku && (
+                        {item.parts.length === 1 && (
                           <span className="mr-2 font-mono text-xs text-ink-soft">
-                            {item.part_sku}
+                            {item.parts[0].sku}
                           </span>
                         )}
-                        {item.vehicle_id !== null && (
+                        {item.is_shell && (
                           <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-ink-soft">
                             Shell
                           </span>
                         )}
                         {item.description}
+                        {item.parts.length > 1 && (
+                          <span className="block text-xs text-ink-soft">
+                            {item.parts.length} parts: {item.parts.map((p) => p.title).join(', ')}
+                          </span>
+                        )}
+                        {item.parts.length === 0 && item.vehicle_name && !item.is_shell && (
+                          <span className="block text-xs text-ink-soft">
+                            off {item.vehicle_name}
+                          </span>
+                        )}
                       </td>
                       <td className="py-1.5 text-right text-ink-soft">x{item.quantity}</td>
                       <td className="py-1.5 text-right tabular-nums">{money(item.line_total)}</td>
@@ -428,11 +341,7 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
 
               {canEdit && (
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={() => setEditing(true)}
-                  >
+                  <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>
                     Edit
                   </button>
                   <button
@@ -491,8 +400,16 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
     fees: sale.fees,
     tax: sale.tax,
   })
+  const [lines, setLines] = useState<Line[]>(() => toLines(sale))
 
-  const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<User[]>('/users') })
+  const users = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.get<User[]>('/users'),
+  })
+
+  // Parts already on this sale are marked sold, so they would otherwise be
+  // missing from the picker and silently dropped on save.
+  const keepPartIds = sale.items.flatMap((item) => item.parts.map((p) => p.id))
 
   const save = useMutation({
     mutationFn: () =>
@@ -504,6 +421,7 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
         shipping: form.shipping || '0',
         fees: form.fees || '0',
         tax: form.tax || '0',
+        items: toPayload(lines),
       }),
     onSuccess: onDone,
   })
@@ -512,8 +430,11 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
     <div className="space-y-3 rounded-lg bg-slate-50 p-3">
       <ErrorNote error={save.error} />
       <p className="text-xs text-ink-soft">
-        Line items cannot be changed here. To correct what sold, void the sale and record it again.
+        Changing what sold puts anything you take off back into stock, and takes anything you add
+        out of it.
       </p>
+
+      <SaleLines lines={lines} onChange={setLines} keepPartIds={keepPartIds} />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Sold on">

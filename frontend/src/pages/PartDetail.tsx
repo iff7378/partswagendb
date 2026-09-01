@@ -366,11 +366,15 @@ function EditForm({
             value={form.status}
             onChange={(e) => set('status', e.target.value as PartStatus)}
           >
-            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+            {Object.entries(STATUS_LABELS)
+              // Sold is what being on a sale means, not a label you apply.
+              // Offering it here let parts leave stock with no money recorded.
+              .filter(([value]) => value !== 'sold' || part.status === 'sold')
+              .map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
           </select>
         </Field>
 

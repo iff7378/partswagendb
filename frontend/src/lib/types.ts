@@ -170,12 +170,19 @@ export interface PartDetail extends Part {
   created_by: UserBrief | null
 }
 
+export interface SaleItemPart {
+  id: number
+  sku: string
+  title: string
+}
+
 export interface SaleItem {
   id: number
-  part_id: number | null
-  part_sku: string | null
+  /** Everything this line covered: one part, a lot of them, or none. */
+  parts: SaleItemPart[]
   vehicle_id: number | null
   vehicle_name: string | null
+  is_shell: boolean
   description: string
   quantity: number
   unit_price: string
