@@ -98,6 +98,11 @@ def list_parts(
     needs_details: bool = Query(
         default=False, description="Only parts missing category, location or price"
     ),
+    missing: str | None = Query(
+        default=None,
+        pattern="^(photo|part_number|location|price)$",
+        description="Only parts missing one specific thing",
+    ),
     aging: bool = Query(default=False, description="Only parts past their own age alert"),
     sellable: bool = Query(
         default=False, description="Only parts that could go on a sale: draft, available, reserved"
@@ -147,6 +152,21 @@ def list_parts(
                 Part.asking_price.is_(None),
                 Part.status == PartStatus.DRAFT,
             )
+        )
+
+    if missing:
+        # One gap at a time. Asking for everything that is not fully filled in
+        # matches almost the whole catalogue and so tells you nothing.
+        gaps = {
+            "photo": ~Part.photos.any(),
+            "part_number": Part.part_number.is_(None),
+            "location": Part.location_id.is_(None),
+            "price": Part.asking_price.is_(None),
+        }
+        # Sold and scrapped parts are finished business, not a to-do list.
+        query = query.where(
+            gaps[missing],
+            Part.status.in_([PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED]),
         )
 
     if aging:

@@ -159,13 +159,18 @@ export default function Parts() {
 
         <div className="flex flex-wrap items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-ink-soft">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
-              checked={params.get('needs_details') === 'true'}
-              onChange={(e) => setParam('needs_details', e.target.checked ? 'true' : '')}
-            />
-            Only parts still missing details
+            Missing
+            <select
+              className="field !w-auto !py-1.5 !text-sm"
+              value={params.get('missing') ?? ''}
+              onChange={(e) => setParam('missing', e.target.value)}
+            >
+              <option value="">Nothing in particular</option>
+              <option value="photo">No photos</option>
+              <option value="part_number">No part number</option>
+              <option value="location">Not on a shelf</option>
+              <option value="price">No price</option>
+            </select>
           </label>
 
           <label className="flex items-center gap-2 text-sm text-ink-soft">

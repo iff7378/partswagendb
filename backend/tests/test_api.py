@@ -784,3 +784,27 @@ def test_the_sellable_filter_includes_drafts_and_reserved(client: TestClient, au
         for p in client.get("/api/parts?sellable=true", headers=auth_headers).json()["items"]
     }
     assert titles == {"A draft", "Available", "Reserved"}
+
+
+def test_missing_filter_picks_one_gap_at_a_time(client: TestClient, auth_headers) -> None:
+    site = client.post(
+        "/api/locations", headers=auth_headers, json={"name": "Shed A", "kind": "site"}
+    ).json()
+    _part(client, auth_headers, "No shelf", part_number="06A 906 461")
+    _part(client, auth_headers, "No part number", location_id=site["id"])
+    _part(client, auth_headers, "Sold already", status="scrapped", location_id=site["id"])
+
+    def titles(query: str) -> set[str]:
+        return {
+            p["title"]
+            for p in client.get(f"/api/parts?{query}", headers=auth_headers).json()["items"]
+        }
+
+    assert titles("missing=location") == {"No shelf"}
+    assert titles("missing=part_number") == {"No part number"}
+    # Nothing has a photo, but finished parts are not a to-do list.
+    assert titles("missing=photo") == {"No shelf", "No part number"}
+
+
+def test_missing_filter_rejects_an_unknown_gap(client: TestClient, auth_headers) -> None:
+    assert client.get("/api/parts?missing=colour", headers=auth_headers).status_code == 422

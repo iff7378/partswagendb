@@ -14,7 +14,7 @@ export default function Dashboard() {
 
   const drafts = useQuery({
     queryKey: ['parts', 'needs-details'],
-    queryFn: () => api.get<Page<Part>>('/parts?needs_details=true&limit=5'),
+    queryFn: () => api.get<Page<Part>>('/parts?missing=location&limit=5'),
   })
 
   const aging = useQuery({
@@ -100,9 +100,9 @@ export default function Dashboard() {
       <div className="mt-8">
         <div className="mb-3 flex items-end justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
-            Waiting on details
+            Not on a shelf yet
           </h2>
-          <Link to="/parts?needs_details=true" className="text-sm font-medium text-rust">
+          <Link to="/parts?missing=location" className="text-sm font-medium text-rust">
             See all
           </Link>
         </div>
@@ -110,7 +110,7 @@ export default function Dashboard() {
         {drafts.isLoading && <Spinner />}
         {drafts.data?.items.length === 0 && (
           <p className="card px-4 py-8 text-center text-sm text-ink-soft">
-            Everything is fully catalogued. Nice.
+            Everything has a home. Nice.
           </p>
         )}
 
