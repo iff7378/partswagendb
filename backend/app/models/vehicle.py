@@ -11,6 +11,7 @@ from app.models.base import JsonColumn, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.part import Part
+    from app.models.sale import SaleItem
     from app.models.user import User
 
 
@@ -55,6 +56,9 @@ class Vehicle(Base, TimestampMixin):
     expenses: Mapped[list["VehicleExpense"]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )
+    # Scrapping the shell: no cascade, because deleting a car must not quietly
+    # rewrite a sale that has already been settled up.
+    sale_items: Mapped[list["SaleItem"]] = relationship(back_populates="vehicle")
 
     @property
     def description(self) -> str:

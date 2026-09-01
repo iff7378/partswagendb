@@ -60,6 +60,9 @@ class SaleChannel(StrEnum):
     FACEBOOK = "facebook"
     LOCAL = "local"
     PHONE = "phone"
+    # Weighing in a stripped shell. Its own channel so scrap income can be told
+    # apart from parts income when judging what a car actually returned.
+    SCRAP = "scrap"
     OTHER = "other"
 
 

@@ -272,6 +272,132 @@ def test_sale_line_needs_a_part_or_a_description(client: TestClient, auth_header
     assert response.status_code == 400
 
 
+def _car(client: TestClient, auth_headers, **extra) -> dict:
+    payload = {"make": "Volkswagen", "model": "Jetta", "decode_vin": False, **extra}
+    return client.post("/api/vehicles", headers=auth_headers, json=payload).json()
+
+
+def test_scrapping_a_car_records_revenue_against_it(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers, nickname="The silver wagon")
+    client.post(
+        "/api/expenses",
+        headers=auth_headers,
+        json={
+            "vehicle_id": car["id"],
+            "description": "Bought the car",
+            "amount": "400.00",
+            "incurred_on": "2026-08-01",
+            "paid_by_id": admin.id,
+        },
+    )
+
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "channel": "scrap",
+            "buyer_name": "Ace Metals",
+            "collected_by_id": admin.id,
+            "items": [{"vehicle_id": car["id"], "unit_price": "180.00"}],
+        },
+    )
+    assert sale.status_code == 201, sale.text
+    line = sale.json()["items"][0]
+    # The description falls back to the car's own name, so the sale still reads
+    # sensibly if the car is deleted later.
+    assert "The silver wagon" in line["description"]
+    assert line["vehicle_name"] == "The silver wagon"
+
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["status"] == "scrapped"
+    assert detail["scrap_revenue"] == "180.00"
+    assert detail["total_revenue"] == "180.00"
+    assert detail["profit"] == "-220.00"
+
+
+def test_a_car_cannot_be_scrapped_twice(client: TestClient, auth_headers, admin) -> None:
+    car = _car(client, auth_headers)
+    payload = {
+        "sold_on": "2026-08-20",
+        "collected_by_id": admin.id,
+        "items": [{"vehicle_id": car["id"], "unit_price": "180.00"}],
+    }
+
+    assert client.post("/api/sales", headers=auth_headers, json=payload).status_code == 201
+    assert client.post("/api/sales", headers=auth_headers, json=payload).status_code == 409
+
+
+def test_voiding_a_scrap_sale_puts_the_car_back_to_stripped(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers)
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [{"vehicle_id": car["id"], "unit_price": "180.00"}],
+        },
+    ).json()
+
+    assert client.delete(f"/api/sales/{sale['id']}", headers=auth_headers).status_code == 200
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["status"] == "stripped"
+    assert detail["scrap_revenue"] == "0.00"
+
+
+def test_a_sale_line_cannot_be_both_a_part_and_a_car(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers)
+    part = client.post("/api/parts", headers=auth_headers, json={"title": "Alternator"}).json()
+
+    response = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [
+                {"vehicle_id": car["id"], "part_id": part["id"], "unit_price": "180.00"},
+            ],
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_scrap_revenue_is_separate_from_parts_revenue(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers)
+    part = client.post(
+        "/api/parts",
+        headers=auth_headers,
+        json={"title": "Alternator", "status": "available", "vehicle_id": car["id"]},
+    ).json()
+
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-18",
+            "collected_by_id": admin.id,
+            "items": [
+                {"part_id": part["id"], "unit_price": "85.00"},
+                {"vehicle_id": car["id"], "unit_price": "180.00"},
+            ],
+        },
+    )
+
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["total_revenue"] == "265.00"
+    assert detail["scrap_revenue"] == "180.00"
+
+
 def test_settle_up_rejects_a_backwards_period(client: TestClient, auth_headers) -> None:
     response = client.get(
         "/api/settle-up?period_start=2026-09-30&period_end=2026-07-01", headers=auth_headers

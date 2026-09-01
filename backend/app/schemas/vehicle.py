@@ -77,6 +77,9 @@ class VehicleDetail(VehicleRead):
     parts_sold: int = 0
     total_expenses: Decimal = Decimal("0")
     total_revenue: Decimal = Decimal("0")
+    # Part of total_revenue, broken out so the car page can show what the shell
+    # itself fetched as against what the parts did.
+    scrap_revenue: Decimal = Decimal("0")
     profit: Decimal = Decimal("0")
 
 

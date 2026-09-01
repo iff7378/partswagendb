@@ -3,15 +3,19 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import CurrentUser, DbSession, RequireEditor
-from app.enums import PartStatus
-from app.models import Part, Sale, SaleItem, User
+from app.enums import PartStatus, VehicleStatus
+from app.models import Part, Sale, SaleItem, User, Vehicle
 from app.schemas.common import Message, Page
 from app.schemas.sale import SaleCreate, SaleDetail, SaleRead, SaleUpdate
 from app.services.identifiers import next_sale_reference
 
 router = APIRouter(prefix="/sales", tags=["sales"])
 
-_LOADERS = (selectinload(Sale.items).selectinload(SaleItem.part), selectinload(Sale.collected_by))
+_LOADERS = (
+    selectinload(Sale.items).selectinload(SaleItem.part),
+    selectinload(Sale.items).selectinload(SaleItem.vehicle),
+    selectinload(Sale.collected_by),
+)
 
 
 def _get_or_404(db: Session, sale_id: int) -> Sale:
@@ -27,6 +31,7 @@ def _to_detail(sale: Sale) -> SaleDetail:
     detail = SaleDetail.model_validate(sale)
     for item, source in zip(detail.items, sale.items, strict=True):
         item.part_sku = source.part.sku if source.part else None
+        item.vehicle_name = source.vehicle.display_name if source.vehicle else None
     return detail
 
 
@@ -66,6 +71,12 @@ def create_sale(db: DbSession, user: RequireEditor, payload: SaleCreate) -> Sale
     )
 
     for line in payload.items:
+        if line.part_id is not None and line.vehicle_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A line is either a part or a car, not both",
+            )
+
         part = None
         if line.part_id is not None:
             part = db.get(Part, line.part_id)
@@ -81,16 +92,41 @@ def create_sale(db: DbSession, user: RequireEditor, payload: SaleCreate) -> Sale
                 )
             part.status = PartStatus.SOLD
 
+        vehicle = None
+        if line.vehicle_id is not None:
+            vehicle = db.get(Vehicle, line.vehicle_id)
+            if vehicle is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Car {line.vehicle_id} does not exist",
+                )
+            # A shell can only be weighed in once. Checking for an existing
+            # line rather than the status, because the status can be set by
+            # hand without any money having changed hands.
+            already = db.execute(
+                select(SaleItem.id).where(SaleItem.vehicle_id == vehicle.id).limit(1)
+            ).scalar_one_or_none()
+            if already is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"{vehicle.display_name} has already been scrapped on another sale",
+                )
+            # Selling the shell is the definition of scrapped.
+            vehicle.status = VehicleStatus.SCRAPPED
+
         description = line.description or (part.title if part else None)
+        if not description and vehicle is not None:
+            description = f"{vehicle.display_name} — shell scrapped"
         if not description:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Each line needs either a part or a description",
+                detail="Each line needs a part, a car, or a description",
             )
 
         sale.items.append(
             SaleItem(
                 part_id=line.part_id,
+                vehicle_id=line.vehicle_id,
                 description=description,
                 quantity=line.quantity,
                 unit_price=line.unit_price,
@@ -132,6 +168,10 @@ def delete_sale(db: DbSession, _: RequireEditor, sale_id: int) -> Message:
     for item in sale.items:
         if item.part is not None and item.part.status == PartStatus.SOLD:
             item.part.status = PartStatus.AVAILABLE
+        # The shell never went to the yard after all, so it is back to being a
+        # stripped car sitting on the property.
+        if item.vehicle is not None and item.vehicle.status == VehicleStatus.SCRAPPED:
+            item.vehicle.status = VehicleStatus.STRIPPED
 
     reference = sale.reference
     db.delete(sale)

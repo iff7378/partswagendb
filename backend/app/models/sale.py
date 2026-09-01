@@ -12,6 +12,7 @@ from app.models.base import TimestampMixin
 if TYPE_CHECKING:
     from app.models.part import Part
     from app.models.user import User
+    from app.models.vehicle import Vehicle
 
 
 class Sale(Base, TimestampMixin):
@@ -72,6 +73,14 @@ class SaleItem(Base, TimestampMixin):
         ForeignKey("parts.id", ondelete="SET NULL"), index=True
     )
     part: Mapped["Part | None"] = relationship(back_populates="sale_items")
+
+    # A line can instead be a whole car: the stripped shell weighed in at the
+    # yard. It is not a Part -- it never had a SKU, a shelf or a photo -- but
+    # the money is real revenue and belongs against the car it came from.
+    vehicle_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="SET NULL"), index=True
+    )
+    vehicle: Mapped["Vehicle | None"] = relationship(back_populates="sale_items")
 
     # Snapshot so the sale record survives the part being edited or deleted.
     description: Mapped[str] = mapped_column(String(255), nullable=False)

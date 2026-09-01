@@ -4,7 +4,7 @@ from sqlalchemy import func, or_, select
 from app.config import settings
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.enums import PartStatus
-from app.models import Part, Sale, SaleItem, Vehicle, VehicleExpense
+from app.models import Part, SaleItem, Vehicle, VehicleExpense
 from app.schemas.common import Message, Page
 from app.schemas.vehicle import (
     VehicleCreate,
@@ -189,13 +189,18 @@ def get_vehicle(db: DbSession, _: CurrentUser, vehicle_id: int) -> VehicleDetail
         select(func.sum(VehicleExpense.amount)).where(VehicleExpense.vehicle_id == vehicle_id)
     ).scalar_one_or_none()
 
-    # Revenue attributable to this vehicle: sale lines for parts that came off it.
+    # Revenue attributable to this vehicle: sale lines for parts that came off
+    # it, plus the line for the shell itself if it has been weighed in.
+    line_total = func.sum(SaleItem.unit_price * SaleItem.quantity)
     revenue = db.execute(
-        select(func.sum(SaleItem.unit_price * SaleItem.quantity))
+        select(line_total)
         .select_from(SaleItem)
-        .join(Part, Part.id == SaleItem.part_id)
-        .join(Sale, Sale.id == SaleItem.sale_id)
-        .where(Part.vehicle_id == vehicle_id)
+        .outerjoin(Part, Part.id == SaleItem.part_id)
+        .where(or_(Part.vehicle_id == vehicle_id, SaleItem.vehicle_id == vehicle_id))
+    ).scalar_one_or_none()
+
+    scrap = db.execute(
+        select(line_total).where(SaleItem.vehicle_id == vehicle_id)
     ).scalar_one_or_none()
 
     total_expenses = money(expenses) if expenses else ZERO
@@ -206,6 +211,7 @@ def get_vehicle(db: DbSession, _: CurrentUser, vehicle_id: int) -> VehicleDetail
     detail.parts_sold = parts_sold
     detail.total_expenses = total_expenses
     detail.total_revenue = total_revenue
+    detail.scrap_revenue = money(scrap) if scrap else ZERO
     detail.profit = money(total_revenue - total_expenses)
     return detail
 

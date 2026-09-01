@@ -10,6 +10,8 @@ from app.schemas.user import UserBrief
 
 class SaleItemCreate(BaseModel):
     part_id: int | None = None
+    # Set instead of part_id when the line is a whole car going for scrap.
+    vehicle_id: int | None = None
     description: str | None = Field(default=None, max_length=255)
     quantity: int = Field(default=1, gt=0)
     unit_price: Decimal = Field(ge=0, decimal_places=2)
@@ -19,6 +21,8 @@ class SaleItemRead(ORMModel):
     id: int
     part_id: int | None = None
     part_sku: str | None = None
+    vehicle_id: int | None = None
+    vehicle_name: str | None = None
     description: str
     quantity: int
     unit_price: Decimal
