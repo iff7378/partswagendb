@@ -41,9 +41,13 @@ _GENERIC_PATTERN = re.compile(r"\b([A-Z0-9][A-Z0-9\-]{5,19})\b")
 # Below this many real digits a lookalike match is almost certainly a word.
 _MIN_REAL_DIGITS = 2
 
-# Long-edge size fed to Tesseract. Large enough to keep characters legible,
-# small enough that sensor noise from a phone camera averages out.
-TARGET_LONG_EDGE_PX = 1600
+# Long-edge sizes Tesseract is run at. The small one suppresses sensor noise on
+# a full-frame shot; the larger ones recover a sticker that occupies only a
+# fraction of the photo. Results from all of them are pooled.
+OCR_LONG_EDGES = (1600, 2048, 3072)
+
+# Beyond this, upscaling invents detail rather than revealing it.
+MAX_UPSCALE = 2.0
 
 
 def _to_digits(text: str) -> str:
@@ -54,45 +58,61 @@ def _real_digit_count(text: str) -> int:
     return sum(1 for c in text if c.isdigit())
 
 
-def _preprocess(image: Image.Image) -> Image.Image:
-    """Normalise a photo to the size and form Tesseract reads best.
+def _rescaled(image: Image.Image, target_long_edge: int) -> Image.Image | None:
+    """Grayscale copy with its long edge at `target_long_edge`, or None to skip.
 
-    Resolution matters far more than contrast here. A 12MP phone photo left at
-    full size fails outright — Tesseract latches onto sensor noise instead of
-    the label, taking seconds and returning nothing. Scaling the long edge to
-    ~1600px averages that noise away and makes the text dominant, which turns a
-    3.5s miss into a 0.3s hit on the same image.
-
-    Small images are still scaled up, since a tiny crop gives Tesseract too few
-    pixels per character.
-
-    Deliberately no sharpening. It looks like it should help a faint stamped
-    number, and it is harmless on a clean close-up, but on a real photo it
-    re-amplifies the sensor noise the downscale just removed and Tesseract goes
-    back to reading nothing.
+    Upscaling past 2x invents detail rather than revealing it, so those passes
+    are skipped instead of run for nothing.
     """
-    image = ImageOps.exif_transpose(image)
-    image = image.convert("L")
-
     longest = max(image.size)
-    if longest != TARGET_LONG_EDGE_PX:
-        scale = TARGET_LONG_EDGE_PX / longest
-        image = image.resize(
-            (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
-            Image.Resampling.LANCZOS,
-        )
+    scale = target_long_edge / longest
+    if scale > MAX_UPSCALE:
+        return None
 
-    return ImageOps.autocontrast(image)
+    resized = image.resize(
+        (max(1, round(image.width * scale)), max(1, round(image.height * scale))),
+        Image.Resampling.LANCZOS,
+    )
+    # No sharpening: it looks like it should help a faint stamped number, but on
+    # a real photo it amplifies sensor noise and Tesseract reads nothing.
+    return ImageOps.autocontrast(resized)
+
+
+def _prepare(data: bytes) -> Image.Image:
+    return ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("L")
 
 
 def extract_text(data: bytes) -> str | None:
+    """OCR a photo at several sizes and return everything read, concatenated.
+
+    There is no single right scale. A part photographed close up wants shrinking,
+    because at full size Tesseract latches onto sensor noise instead of the
+    label. A part lying on the floor with a small sticker wants enlarging, since
+    that sticker is a fraction of the frame and shrinking the photo shrinks it
+    further. Real photos are usually the second kind.
+
+    Running a few sizes and pooling the results costs a couple of seconds in a
+    background task and beats guessing. On a real ECU sticker the smallest pass
+    read nothing while larger ones recovered two part numbers.
+    """
     if not settings.ocr_enabled:
         return None
+
     try:
         import pytesseract
 
-        with Image.open(io.BytesIO(data)) as image:
-            return str(pytesseract.image_to_string(_preprocess(image)))
+        base = _prepare(data)
+        seen_widths: set[int] = set()
+        chunks: list[str] = []
+
+        for target in OCR_LONG_EDGES:
+            candidate = _rescaled(base, target)
+            if candidate is None or candidate.width in seen_widths:
+                continue
+            seen_widths.add(candidate.width)
+            chunks.append(str(pytesseract.image_to_string(candidate)))
+
+        return "\n".join(chunks) if chunks else None
     except Exception:
         logger.warning("OCR failed", exc_info=True)
         return None

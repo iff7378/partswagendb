@@ -48,6 +48,11 @@ export default function PartDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['part', id] }),
   })
 
+  const reprocess = useMutation({
+    mutationFn: (photoId: number) => api.post(`/photos/${photoId}/reprocess`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['part', id] }),
+  })
+
   const setPrimary = useMutation({
     mutationFn: (photoId: number) => api.post(`/photos/${photoId}/primary`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['part', id] }),
@@ -165,6 +170,22 @@ export default function PartDetailPage() {
 
             {awaitingOcr && (
               <p className="text-sm text-ink-soft">Reading part numbers from the photos…</p>
+            )}
+
+            {canEdit && !awaitingOcr && p.photos.length > 0 && suggestions.length === 0 && (
+              <div className="card flex flex-wrap items-center gap-3 p-4">
+                <p className="text-sm text-ink-soft">
+                  No part numbers found in these photos.
+                </p>
+                <button
+                  type="button"
+                  className="btn-secondary ml-auto"
+                  disabled={reprocess.isPending}
+                  onClick={() => p.photos.forEach((photo) => reprocess.mutate(photo.id))}
+                >
+                  {reprocess.isPending ? 'Reading…' : 'Try reading again'}
+                </button>
+              </div>
             )}
 
             {suggestions.length > 0 && !p.part_number && canEdit && (

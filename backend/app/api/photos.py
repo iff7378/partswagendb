@@ -108,6 +108,38 @@ async def upload_part_photo(
     return _with_urls(photo)
 
 
+@router.post("/{photo_id}/reprocess", response_model=PhotoRead)
+def reprocess(
+    db: DbSession, _: RequireEditor, background: BackgroundTasks, photo_id: int
+) -> PhotoRead:
+    """Read the part numbers again.
+
+    Worth having because the reading depends on how OCR is tuned, and that
+    changes. Without this the only way to pick up an improvement on an existing
+    photo is to delete it and upload it again.
+    """
+    photo = db.get(Photo, photo_id)
+    if photo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo not found")
+    if not settings.ocr_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="OCR is switched off on this server"
+        )
+
+    # The stored image is smaller than the original upload, but it is what we
+    # still have, and it is what the reader gets from here on.
+    data = storage.download_bytes(photo.object_key)
+
+    photo.ocr_status = OcrStatus.PENDING
+    photo.ocr_text = None
+    photo.ocr_candidates = None
+    db.commit()
+    db.refresh(photo)
+
+    background.add_task(_run_ocr, photo.id, data)
+    return _with_urls(photo)
+
+
 @router.post("/{photo_id}/primary", response_model=PhotoRead)
 def set_primary(db: DbSession, _: RequireEditor, photo_id: int) -> PhotoRead:
     photo = db.get(Photo, photo_id)
