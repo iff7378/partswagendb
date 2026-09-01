@@ -6,9 +6,18 @@ import { EmptyState, ErrorNote, Field, PageHeader, Spinner } from '../components
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { date, money } from '../lib/format'
-import type { Page, Part, Sale, SaleChannel, SaleDetail, User } from '../lib/types'
+import type { Page, Part, Sale, SaleChannel, SaleDetail, User, Vehicle } from '../lib/types'
 
-const CHANNELS: SaleChannel[] = ['local', 'ebay', 'facebook', 'phone', 'other']
+const CHANNELS: SaleChannel[] = ['local', 'ebay', 'facebook', 'phone', 'scrap', 'other']
+
+const CHANNEL_LABELS: Record<SaleChannel, string> = {
+  local: 'Local',
+  ebay: 'eBay',
+  facebook: 'Facebook',
+  phone: 'Phone',
+  scrap: 'Scrap yard',
+  other: 'Other',
+}
 
 export default function Sales() {
   const { canEdit } = useAuth()
@@ -55,13 +64,14 @@ export default function Sales() {
 }
 
 interface Line {
-  part_id: string
+  /** '' for a free-text line, 'p:<id>' for a part, 'v:<id>' for a car shell. */
+  ref: string
   description: string
   unit_price: string
   quantity: string
 }
 
-const EMPTY_LINE: Line = { part_id: '', description: '', unit_price: '', quantity: '1' }
+const EMPTY_LINE: Line = { ref: '', description: '', unit_price: '', quantity: '1' }
 
 function NewSaleForm({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient()
@@ -81,6 +91,14 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
     queryKey: ['parts', 'available'],
     queryFn: () => api.get<Page<Part>>('/parts?status=available&limit=200'),
   })
+  const vehicles = useQuery({
+    queryKey: ['vehicles', 'brief'],
+    queryFn: () => api.get<Page<Vehicle>>('/vehicles?limit=200'),
+  })
+
+  // A shell can only be weighed in once, so cars already scrapped are gone
+  // from the picker rather than sitting there waiting to be rejected.
+  const scrappable = vehicles.data?.items.filter((v) => v.status !== 'scrapped') ?? []
 
   const create = useMutation({
     mutationFn: () =>
@@ -93,9 +111,10 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
         fees: form.fees || '0',
         tax: form.tax || '0',
         items: lines
-          .filter((line) => line.part_id || line.description.trim())
+          .filter((line) => line.ref || line.description.trim())
           .map((line) => ({
-            part_id: line.part_id ? Number(line.part_id) : null,
+            part_id: line.ref.startsWith('p:') ? Number(line.ref.slice(2)) : null,
+            vehicle_id: line.ref.startsWith('v:') ? Number(line.ref.slice(2)) : null,
             description: line.description.trim() || null,
             unit_price: line.unit_price || '0',
             quantity: Number(line.quantity) || 1,
@@ -104,6 +123,9 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['sales'] })
       void queryClient.invalidateQueries({ queryKey: ['parts'] })
+      // Scrapping a shell moves the car to scrapped, so both car views are stale.
+      void queryClient.invalidateQueries({ queryKey: ['vehicle'] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
       void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       onDone()
@@ -147,7 +169,7 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
           >
             {CHANNELS.map((c) => (
               <option key={c} value={c}>
-                {c[0].toUpperCase() + c.slice(1)}
+                {CHANNEL_LABELS[c]}
               </option>
             ))}
           </select>
@@ -184,24 +206,35 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
           <div key={index} className="grid gap-2 sm:grid-cols-[2fr_1fr_5rem_auto]">
             <select
               className="field"
-              value={line.part_id}
+              value={line.ref}
               onChange={(e) => {
-                const part = available.data?.items.find((p) => String(p.id) === e.target.value)
-                setLine(index, {
-                  part_id: e.target.value,
-                  unit_price: part?.asking_price ?? line.unit_price,
-                })
+                const ref = e.target.value
+                const part = ref.startsWith('p:')
+                  ? available.data?.items.find((p) => String(p.id) === ref.slice(2))
+                  : undefined
+                setLine(index, { ref, unit_price: part?.asking_price ?? line.unit_price })
+                // Picking a shell almost always means a trip to the yard.
+                if (ref.startsWith('v:')) setForm((p) => ({ ...p, channel: 'scrap' }))
               }}
             >
               <option value="">Something not in inventory</option>
-              {available.data?.items.map((part) => (
-                <option key={part.id} value={part.id}>
-                  {part.sku} · {part.title}
-                </option>
-              ))}
+              <optgroup label="Parts in stock">
+                {available.data?.items.map((part) => (
+                  <option key={part.id} value={`p:${part.id}`}>
+                    {part.sku} · {part.title}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Whole car for scrap">
+                {scrappable.map((v) => (
+                  <option key={v.id} value={`v:${v.id}`}>
+                    {v.display_name} — shell
+                  </option>
+                ))}
+              </optgroup>
             </select>
 
-            {!line.part_id && (
+            {!line.ref && (
               <input
                 className="field"
                 placeholder="Describe it"
@@ -304,6 +337,9 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
     // query is disabled by then and a disabled query does not refetch.
     void queryClient.invalidateQueries({ queryKey: ['sale', sale.id] })
     void queryClient.invalidateQueries({ queryKey: ['parts'] })
+    // Voiding a scrap line puts the car back to stripped.
+    void queryClient.invalidateQueries({ queryKey: ['vehicle'] })
+    void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
     void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   }
@@ -329,7 +365,7 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">
             {sale.buyer_name || 'Walk-in buyer'}{' '}
-            <span className="font-normal text-ink-soft">via {sale.channel}</span>
+            <span className="font-normal text-ink-soft">via {CHANNEL_LABELS[sale.channel]}</span>
           </p>
           <p className="text-xs text-ink-soft">
             {sale.reference} · {date(sale.sold_on)} · collected by {sale.collected_by.full_name}
@@ -359,6 +395,11 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
                         {item.part_sku && (
                           <span className="mr-2 font-mono text-xs text-ink-soft">
                             {item.part_sku}
+                          </span>
+                        )}
+                        {item.vehicle_id !== null && (
+                          <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-ink-soft">
+                            Shell
                           </span>
                         )}
                         {item.description}
@@ -401,8 +442,8 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
                     onClick={() => {
                       if (
                         confirm(
-                          `Void ${sale.reference}? Its parts go back into stock and the ` +
-                            `settle-up report changes.`,
+                          `Void ${sale.reference}? Its parts go back into stock, any car ` +
+                            `on it goes back to stripped, and the settle-up report changes.`,
                         )
                       ) {
                         voidSale.mutate()
@@ -492,7 +533,7 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
           >
             {CHANNELS.map((c) => (
               <option key={c} value={c}>
-                {c[0].toUpperCase() + c.slice(1)}
+                {CHANNEL_LABELS[c]}
               </option>
             ))}
           </select>

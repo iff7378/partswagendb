@@ -4,7 +4,7 @@ export type PartStatus = 'draft' | 'available' | 'reserved' | 'sold' | 'scrapped
 export type PartCondition = 'new' | 'a' | 'b' | 'c' | 'core' | 'salvage' | 'unknown'
 export type VehicleStatus = 'acquired' | 'in_teardown' | 'stripped' | 'scrapped'
 export type LocationKind = 'site' | 'shelf' | 'bay' | 'bin'
-export type SaleChannel = 'ebay' | 'facebook' | 'local' | 'phone' | 'other'
+export type SaleChannel = 'ebay' | 'facebook' | 'local' | 'phone' | 'scrap' | 'other'
 export type ExpenseCategory =
   | 'purchase'
   | 'transport'
@@ -70,6 +70,7 @@ export interface VehicleDetail extends Vehicle {
   parts_sold: number
   total_expenses: string
   total_revenue: string
+  scrap_revenue: string
   profit: string
 }
 
@@ -173,6 +174,8 @@ export interface SaleItem {
   id: number
   part_id: number | null
   part_sku: string | null
+  vehicle_id: number | null
+  vehicle_name: string | null
   description: string
   quantity: number
   unit_price: string

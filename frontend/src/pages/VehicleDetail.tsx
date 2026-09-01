@@ -60,11 +60,16 @@ export default function VehicleDetailPage() {
     },
   })
 
+  // Set when the car is moved to scrapped, so we can ask what the yard paid
+  // while it is still fresh. Nobody comes back to the Sales page later.
+  const [scrapping, setScrapping] = useState(false)
+
   const setStatus = useMutation({
     mutationFn: (status: VehicleStatus) => api.patch(`/vehicles/${id}`, { status }),
-    onSuccess: () => {
+    onSuccess: (_data, status) => {
       void queryClient.invalidateQueries({ queryKey: ['vehicle', id] })
       void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      if (status === 'scrapped') setScrapping(true)
     },
   })
 
@@ -110,6 +115,16 @@ export default function VehicleDetailPage() {
 
       <p className="-mt-3 mb-4 text-sm text-ink-soft">{VEHICLE_STATUS_HINTS[v.status]}</p>
 
+      {scrapping && <ScrapPanel vehicle={v} onDone={() => setScrapping(false)} />}
+
+      {/* A way back in: the yard's cheque often turns up days after the shell
+          leaves, and by then the prompt above is long gone. */}
+      {!scrapping && canEdit && v.status === 'scrapped' && Number(v.scrap_revenue) === 0 && (
+        <button type="button" className="btn-secondary mb-5" onClick={() => setScrapping(true)}>
+          Record what the yard paid
+        </button>
+      )}
+
       {editing && <EditVehicle vehicle={v} onDone={() => setEditing(false)} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -122,6 +137,12 @@ export default function VehicleDetailPage() {
           tone={profit >= 0 ? 'good' : 'bad'}
         />
       </div>
+
+      {Number(v.scrap_revenue) > 0 && (
+        <p className="mt-2 text-sm text-ink-soft">
+          The shell fetched {money(v.scrap_revenue)} at the yard, counted in the profit above.
+        </p>
+      )}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <section className="card divide-y divide-slate-100">
@@ -219,6 +240,161 @@ export default function VehicleDetailPage() {
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Asked the moment a car is marked scrapped.
+ *
+ * Scrapping goes one of two ways: the yard weighs the shell in and hands over
+ * cash, or it charges to come and take it. The first is revenue and the second
+ * is a disposal cost, and the settle-up ledger needs to know which, along with
+ * who was holding the money either way.
+ */
+function ScrapPanel({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () => void }) {
+  const queryClient = useQueryClient()
+  const [paidUs, setPaidUs] = useState(true)
+  const [form, setForm] = useState({
+    amount: '',
+    on: new Date().toISOString().slice(0, 10),
+    yard: '',
+    user_id: '',
+  })
+
+  const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<User[]>('/users') })
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ['vehicle', String(vehicle.id)] })
+    void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+    void queryClient.invalidateQueries({ queryKey: ['expenses'] })
+    void queryClient.invalidateQueries({ queryKey: ['sales'] })
+    void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+  }
+
+  const record = useMutation({
+    mutationFn: () =>
+      paidUs
+        ? api.post('/sales', {
+            sold_on: form.on,
+            channel: 'scrap',
+            buyer_name: form.yard.trim() || null,
+            collected_by_id: Number(form.user_id),
+            items: [{ vehicle_id: vehicle.id, unit_price: form.amount || '0', quantity: 1 }],
+          })
+        : api.post('/expenses', {
+            vehicle_id: vehicle.id,
+            description: form.yard.trim()
+              ? `Scrapped the shell — ${form.yard.trim()}`
+              : 'Scrapped the shell',
+            category: 'disposal',
+            amount: form.amount,
+            incurred_on: form.on,
+            paid_by_id: Number(form.user_id),
+          }),
+    onSuccess: () => {
+      refresh()
+      onDone()
+    },
+  })
+
+  // Already weighed in, so there is nothing left to ask.
+  if (Number(vehicle.scrap_revenue) > 0) return null
+
+  return (
+    <form
+      className="card mb-5 space-y-3 border-rust/40 p-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        record.mutate()
+      }}
+    >
+      <ErrorNote error={record.error} />
+
+      <div>
+        <p className="text-sm font-semibold">The shell has gone. Did money change hands?</p>
+        <p className="mt-1 text-sm text-ink-soft">
+          Recording it here keeps this car&rsquo;s profit honest and puts it in the settle-up
+          report.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={paidUs ? 'btn-primary' : 'btn-secondary'}
+          onClick={() => setPaidUs(true)}
+        >
+          The yard paid us
+        </button>
+        <button
+          type="button"
+          className={paidUs ? 'btn-secondary' : 'btn-primary'}
+          onClick={() => setPaidUs(false)}
+        >
+          We paid to have it taken
+        </button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Amount">
+          <input
+            className="field"
+            inputMode="decimal"
+            value={form.amount}
+            onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+            placeholder="180.00"
+            required
+          />
+        </Field>
+
+        <Field label="Date">
+          <input
+            type="date"
+            className="field"
+            value={form.on}
+            onChange={(e) => setForm((p) => ({ ...p, on: e.target.value }))}
+          />
+        </Field>
+
+        <Field label="Which yard">
+          <input
+            className="field"
+            value={form.yard}
+            onChange={(e) => setForm((p) => ({ ...p, yard: e.target.value }))}
+            placeholder="Ace Metals"
+          />
+        </Field>
+
+        <Field
+          label={paidUs ? 'Who took the money' : 'Who paid'}
+          hint="This drives the settle-up report."
+        >
+          <select
+            className="field"
+            value={form.user_id}
+            onChange={(e) => setForm((p) => ({ ...p, user_id: e.target.value }))}
+            required
+          >
+            <option value="">Pick someone</option>
+            {users.data?.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="flex gap-2">
+        <button type="submit" className="btn-primary flex-1" disabled={record.isPending}>
+          {record.isPending ? 'Saving…' : 'Record it'}
+        </button>
+        <button type="button" className="btn-secondary flex-1" onClick={onDone}>
+          Nothing changed hands
+        </button>
+      </div>
+    </form>
   )
 }
 
