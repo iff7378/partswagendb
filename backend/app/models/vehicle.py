@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -19,7 +19,13 @@ class Vehicle(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     vin: Mapped[str | None] = mapped_column(String(17), unique=True, index=True)
+    # A missing VIN is ambiguous on its own: not yet looked up, or genuinely
+    # unreadable. This says which, so nobody keeps going out to check.
+    vin_unknown: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     stock_number: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
+
+    # What the car actually gets called day to day: "the silver wagon".
+    nickname: Mapped[str | None] = mapped_column(String(64))
 
     year: Mapped[int | None] = mapped_column(Integer)
     make: Mapped[str | None] = mapped_column(String(64), index=True)
@@ -51,9 +57,19 @@ class Vehicle(Base, TimestampMixin):
     )
 
     @property
-    def display_name(self) -> str:
+    def description(self) -> str:
+        """Year, make, model and trim, as far as they are known."""
         parts = [str(p) for p in (self.year, self.make, self.model, self.trim) if p]
-        return " ".join(parts) or self.stock_number
+        return " ".join(parts)
+
+    @property
+    def display_name(self) -> str:
+        """How the car is referred to everywhere else in the system.
+
+        The nickname wins when there is one: people say "the silver wagon", not
+        "2011 Volkswagen Jetta SportWagen".
+        """
+        return self.nickname or self.description or self.stock_number
 
 
 class VehicleExpense(Base, TimestampMixin):

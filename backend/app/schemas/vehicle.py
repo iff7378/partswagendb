@@ -28,6 +28,8 @@ def normalise_vin(value: str | None) -> str | None:
 
 class VehicleBase(BaseModel):
     vin: str | None = None
+    vin_unknown: bool = False
+    nickname: str | None = Field(default=None, max_length=64)
     year: int | None = Field(default=None, ge=1900, le=2100)
     make: str | None = None
     model: str | None = None
@@ -64,6 +66,7 @@ class VehicleRead(VehicleBase, ORMModel):
     id: int
     stock_number: str
     display_name: str
+    description: str
     created_at: datetime
     created_by: UserBrief | None = None
 

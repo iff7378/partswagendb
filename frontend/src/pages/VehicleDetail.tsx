@@ -78,7 +78,13 @@ export default function VehicleDetailPage() {
     <>
       <PageHeader
         title={v.display_name}
-        subtitle={`${v.stock_number}${v.vin ? ` · ${v.vin}` : ''}`}
+        subtitle={[
+          v.nickname ? v.description : null,
+          v.stock_number,
+          v.vin ?? (v.vin_unknown ? 'VIN unknown' : null),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
         actions={
           canEdit && (
             <>
@@ -122,6 +128,15 @@ export default function VehicleDetailPage() {
           <h2 className="px-4 py-3 text-sm font-semibold uppercase tracking-wide text-ink-soft">
             The car
           </h2>
+          <Row label="VIN">
+            {v.vin ? (
+              <span className="font-mono">{v.vin}</span>
+            ) : v.vin_unknown ? (
+              <span className="italic text-ink-soft">Unknown</span>
+            ) : (
+              '—'
+            )}
+          </Row>
           <Row label="Year">{v.year ?? '—'}</Row>
           <Row label="Engine">{v.engine ?? '—'}</Row>
           <Row label="Transmission">{v.transmission ?? '—'}</Row>
@@ -477,7 +492,9 @@ function EditVehicle({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =
   const queryClient = useQueryClient()
   const vinFile = useRef<HTMLInputElement>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [vinUnknown, setVinUnknown] = useState(vehicle.vin_unknown)
   const [form, setForm] = useState({
+    nickname: vehicle.nickname ?? '',
     vin: vehicle.vin ?? '',
     year: vehicle.year ? String(vehicle.year) : '',
     make: vehicle.make ?? '',
@@ -530,6 +547,7 @@ function EditVehicle({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =
     },
     onSuccess: (d) => {
       applyDecode(d)
+      setVinUnknown(false)
       setNote(`Read ${d.vin} — ${[d.year, d.make, d.model].filter(Boolean).join(' ')}`)
       if (vinFile.current) vinFile.current.value = ''
     },
@@ -538,7 +556,9 @@ function EditVehicle({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =
   const save = useMutation({
     mutationFn: () =>
       api.patch(`/vehicles/${vehicle.id}`, {
-        vin: form.vin.trim() || null,
+        nickname: form.nickname.trim() || null,
+        vin: vinUnknown ? null : form.vin.trim() || null,
+        vin_unknown: vinUnknown,
         year: form.year ? Number(form.year) : null,
         make: form.make || null,
         model: form.model || null,
@@ -573,24 +593,47 @@ function EditVehicle({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{note}</p>
       )}
 
+      <Field
+        label="What you'll call it"
+        hint="Used everywhere else in the app. Leave blank to use the year, make and model."
+      >
+        <input
+          className="field"
+          value={form.nickname}
+          onChange={(e) => set('nickname', e.target.value)}
+          placeholder="The silver wagon"
+        />
+      </Field>
+
       <Field label="VIN" hint="17 characters. Decoding fills in whatever is still blank.">
         <div className="flex flex-wrap gap-2">
           <input
             className="field font-mono uppercase"
-            value={form.vin}
+            value={vinUnknown ? '' : form.vin}
             onChange={(e) => set('vin', e.target.value.toUpperCase())}
             maxLength={17}
+            disabled={vinUnknown}
           />
           <button
             type="button"
             className="btn-secondary"
-            disabled={form.vin.trim().length !== 17 || decode.isPending}
+            disabled={vinUnknown || form.vin.trim().length !== 17 || decode.isPending}
             onClick={() => decode.mutate(form.vin.trim())}
           >
             {decode.isPending ? 'Looking…' : 'Decode'}
           </button>
         </div>
       </Field>
+
+      <label className="flex items-center gap-2 text-sm text-ink-soft">
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
+          checked={vinUnknown}
+          onChange={(e) => setVinUnknown(e.target.checked)}
+        />
+        VIN is unknown — plate missing or unreadable
+      </label>
 
       <Field
         label="Or read the VIN from a photo"

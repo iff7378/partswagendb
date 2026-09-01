@@ -127,6 +127,10 @@ def list_vehicles(
 async def create_vehicle(db: DbSession, user: RequireEditor, payload: VehicleCreate) -> Vehicle:
     data = payload.model_dump(exclude={"decode_vin", "stock_number"})
 
+    # Marking the VIN unknown wins over a stale value in the field.
+    if data.get("vin_unknown"):
+        data["vin"] = None
+
     if data.get("vin"):
         existing = db.execute(
             select(Vehicle).where(Vehicle.vin == data["vin"])
@@ -212,6 +216,11 @@ def update_vehicle(
 ) -> Vehicle:
     vehicle = _get_or_404(db, vehicle_id)
     updates = payload.model_dump(exclude_unset=True)
+
+    if updates.get("vin_unknown"):
+        updates["vin"] = None
+    elif updates.get("vin"):
+        updates["vin_unknown"] = False
 
     if updates.get("vin"):
         clash = db.execute(

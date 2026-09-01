@@ -38,11 +38,15 @@ export interface Page<T> {
 export interface VehicleBrief {
   id: number
   stock_number: string
+  /** Nickname when the car has one, otherwise year/make/model. */
   display_name: string
 }
 
 export interface Vehicle extends VehicleBrief {
   vin: string | null
+  vin_unknown: boolean
+  nickname: string | null
+  description: string
   year: number | null
   make: string | null
   model: string | null

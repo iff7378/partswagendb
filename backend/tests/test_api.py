@@ -424,3 +424,59 @@ def test_part_exposes_its_age(client: TestClient, auth_headers) -> None:
     ).json()
     assert part["days_in_stock"] == 0
     assert part["is_overdue"] is False
+
+
+def test_nickname_becomes_the_cars_display_name(client: TestClient, auth_headers) -> None:
+    """People say "the silver wagon", not "2011 Volkswagen Jetta SportWagen"."""
+    car = client.post(
+        "/api/vehicles",
+        headers=auth_headers,
+        json={"year": 2011, "make": "VW", "model": "Jetta", "decode_vin": False},
+    ).json()
+    assert car["display_name"] == "2011 VW Jetta"
+
+    named = client.patch(
+        f"/api/vehicles/{car['id']}", headers=auth_headers, json={"nickname": "Silver wagon"}
+    ).json()
+    assert named["display_name"] == "Silver wagon"
+    # The real description stays available for the car's own page.
+    assert named["description"] == "2011 VW Jetta"
+
+
+def test_a_vin_can_be_recorded_as_unknown(client: TestClient, auth_headers) -> None:
+    car = client.post(
+        "/api/vehicles",
+        headers=auth_headers,
+        json={"vin_unknown": True, "make": "VW", "decode_vin": False},
+    ).json()
+    assert car["vin"] is None
+    assert car["vin_unknown"] is True
+
+
+def test_marking_the_vin_unknown_clears_any_vin(client: TestClient, auth_headers) -> None:
+    car = client.post(
+        "/api/vehicles",
+        headers=auth_headers,
+        json={"vin": "3VWFE21C04M000001", "decode_vin": False},
+    ).json()
+    assert car["vin"] == "3VWFE21C04M000001"
+
+    updated = client.patch(
+        f"/api/vehicles/{car['id']}", headers=auth_headers, json={"vin_unknown": True}
+    ).json()
+    assert updated["vin"] is None
+    assert updated["vin_unknown"] is True
+
+
+def test_entering_a_vin_clears_the_unknown_flag(client: TestClient, auth_headers) -> None:
+    car = client.post(
+        "/api/vehicles", headers=auth_headers, json={"vin_unknown": True, "decode_vin": False}
+    ).json()
+
+    updated = client.patch(
+        f"/api/vehicles/{car['id']}",
+        headers=auth_headers,
+        json={"vin": "3VWFE21C04M000001"},
+    ).json()
+    assert updated["vin"] == "3VWFE21C04M000001"
+    assert updated["vin_unknown"] is False

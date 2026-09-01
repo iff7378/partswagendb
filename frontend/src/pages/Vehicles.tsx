@@ -54,17 +54,22 @@ export default function Vehicles() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate font-semibold">{v.display_name}</p>
-                <p className="text-xs text-ink-soft">{v.stock_number}</p>
+                <p className="truncate text-xs text-ink-soft">
+                  {v.nickname && v.description ? `${v.description} · ` : ''}
+                  {v.stock_number}
+                </p>
               </div>
               <span className={`chip ${VEHICLE_STATUS_STYLES[v.status]}`}>
                 {VEHICLE_STATUS_LABELS[v.status]}
               </span>
             </div>
             <dl className="mt-3 space-y-1 text-xs text-ink-soft">
-              {v.vin && (
+              {(v.vin || v.vin_unknown) && (
                 <div className="flex justify-between gap-2">
                   <dt>VIN</dt>
-                  <dd className="truncate font-mono">{v.vin}</dd>
+                  <dd className={v.vin ? 'truncate font-mono' : 'italic'}>
+                    {v.vin ?? 'unknown'}
+                  </dd>
                 </div>
               )}
               {v.engine && (
@@ -88,9 +93,11 @@ export default function Vehicles() {
 function AddVehicleForm({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient()
   const [vin, setVin] = useState('')
+  const [vinUnknown, setVinUnknown] = useState(false)
   const [decoded, setDecoded] = useState<VinDecodeResult | null>(null)
   const [decodeNote, setDecodeNote] = useState<string | null>(null)
   const [form, setForm] = useState({
+    nickname: '',
     year: '',
     make: '',
     model: '',
@@ -128,7 +135,9 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
   const create = useMutation({
     mutationFn: () =>
       api.post<Vehicle>('/vehicles', {
-        vin: vin.trim() || null,
+        vin: vinUnknown ? null : vin.trim() || null,
+        vin_unknown: vinUnknown,
+        nickname: form.nickname.trim() || null,
         year: form.year ? Number(form.year) : null,
         make: form.make || null,
         model: form.model || null,
@@ -137,7 +146,7 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
         acquired_on: form.acquired_on || null,
         acquired_from: form.acquired_from || null,
         notes: form.notes || null,
-        decode_vin: !decoded,
+        decode_vin: !decoded && !vinUnknown,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
@@ -158,25 +167,48 @@ function AddVehicleForm({ onDone }: { onDone: () => void }) {
     <form onSubmit={onSubmit} className="card mb-5 space-y-3 p-4">
       <ErrorNote error={create.error} />
 
+      <Field
+        label="What you'll call it"
+        hint="Used everywhere else in the app. Leave blank to use the year, make and model."
+      >
+        <input
+          className="field"
+          value={form.nickname}
+          onChange={(e) => set('nickname', e.target.value)}
+          placeholder="The silver wagon"
+        />
+      </Field>
+
       <Field label="VIN" hint="17 characters. Decoding fills in the rest.">
         <div className="flex gap-2">
           <input
             className="field font-mono uppercase"
-            value={vin}
+            value={vinUnknown ? '' : vin}
             onChange={(e) => setVin(e.target.value.toUpperCase())}
             maxLength={17}
             placeholder="3VWFE21C04M000001"
+            disabled={vinUnknown}
           />
           <button
             type="button"
             className="btn-secondary"
-            disabled={vin.trim().length !== 17 || decode.isPending}
+            disabled={vinUnknown || vin.trim().length !== 17 || decode.isPending}
             onClick={() => decode.mutate(vin.trim())}
           >
             {decode.isPending ? 'Looking…' : 'Decode'}
           </button>
         </div>
       </Field>
+
+      <label className="flex items-center gap-2 text-sm text-ink-soft">
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
+          checked={vinUnknown}
+          onChange={(e) => setVinUnknown(e.target.checked)}
+        />
+        VIN is unknown — plate missing or unreadable
+      </label>
 
       {decoded && (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
