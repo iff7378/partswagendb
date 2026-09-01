@@ -808,3 +808,129 @@ def test_missing_filter_picks_one_gap_at_a_time(client: TestClient, auth_headers
 
 def test_missing_filter_rejects_an_unknown_gap(client: TestClient, auth_headers) -> None:
     assert client.get("/api/parts?missing=colour", headers=auth_headers).status_code == 422
+
+
+def test_a_general_expense_stays_off_every_car(client: TestClient, auth_headers, admin) -> None:
+    car = _car(client, auth_headers)
+    for payload in (
+        {"vehicle_id": car["id"], "description": "Bought the car", "amount": "400.00"},
+        {"description": "Lunch on teardown day", "amount": "25.00", "category": "meals"},
+        {"description": "Cutting discs", "amount": "40.00", "category": "supplies"},
+    ):
+        r = client.post(
+            "/api/expenses",
+            headers=auth_headers,
+            json={"incurred_on": "2026-08-01", "paid_by_id": admin.id, **payload},
+        )
+        assert r.status_code == 201, r.text
+
+    general = client.get("/api/expenses?general=true", headers=auth_headers).json()
+    assert {e["description"] for e in general} == {"Lunch on teardown day", "Cutting discs"}
+
+    # The car carries only its own costs, not the venture's overheads.
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["total_expenses"] == "400.00"
+
+    # But the ledger counts every penny either way.
+    report = client.get(
+        "/api/settle-up?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+    ).json()
+    assert report["total_expenses"] == "465.00"
+
+
+def test_by_vehicle_report_matches_the_single_car_page(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers, nickname="The silver wagon")
+    part = _part(client, auth_headers, "Alternator", vehicle_id=car["id"], status="available")
+    client.post(
+        "/api/expenses",
+        headers=auth_headers,
+        json={
+            "vehicle_id": car["id"],
+            "description": "Bought the car",
+            "amount": "400.00",
+            "incurred_on": "2026-08-01",
+            "paid_by_id": admin.id,
+        },
+    )
+    client.post(
+        "/api/expenses",
+        headers=auth_headers,
+        json={
+            "description": "Lunch",
+            "amount": "25.00",
+            "incurred_on": "2026-08-01",
+            "paid_by_id": admin.id,
+        },
+    )
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [
+                {"part_ids": [part["id"]], "unit_price": "85.00"},
+                {"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"},
+            ],
+        },
+    )
+
+    report = client.get("/api/reports/by-vehicle", headers=auth_headers).json()
+    row = next(v for v in report["vehicles"] if v["id"] == car["id"])
+    single = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+
+    for field in ("total_expenses", "total_revenue", "scrap_revenue", "profit"):
+        assert row[field] == single[field], field
+    assert row["display_name"] == "The silver wagon"
+    assert row["parts_total"] == 1 and row["parts_sold"] == 1
+    # Overheads sit outside the per-car rows.
+    assert report["general_expenses"] == "25.00"
+
+
+def test_a_lot_is_counted_once_in_the_by_vehicle_report(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers)
+    a = _part(client, auth_headers, "Seats", vehicle_id=car["id"], status="available")
+    b = _part(client, auth_headers, "Dash", vehicle_id=car["id"], status="available")
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [a["id"], b["id"]], "unit_price": "400.00"}],
+        },
+    )
+
+    report = client.get("/api/reports/by-vehicle", headers=auth_headers).json()
+    row = next(v for v in report["vehicles"] if v["id"] == car["id"])
+    assert row["total_revenue"] == "400.00"
+
+
+def test_metrics_are_admin_only(client: TestClient, auth_headers, make_user) -> None:
+    make_user("staff2@example.com", role=UserRole.STAFF)
+    token = client.post(
+        "/api/auth/login", data={"username": "staff2@example.com", "password": "password12345"}
+    ).json()["access_token"]
+
+    assert (
+        client.get("/api/reports/metrics", headers={"Authorization": f"Bearer {token}"}).status_code
+        == 403
+    )
+    assert client.get("/api/reports/metrics", headers=auth_headers).status_code == 200
+
+
+def test_metrics_count_what_is_there(client: TestClient, auth_headers, admin) -> None:
+    _car(client, auth_headers)
+    _part(client, auth_headers, "Alternator", status="available")
+    _part(client, auth_headers, "Starter")
+
+    m = client.get("/api/reports/metrics", headers=auth_headers).json()
+    assert m["parts_total"] == 2
+    assert m["parts_by_status"] == {"available": 1, "draft": 1}
+    assert m["vehicles_total"] == 1
+    assert m["photos_total"] == 0 and m["photo_bytes"] == 0
+    assert m["users_total"] >= 1

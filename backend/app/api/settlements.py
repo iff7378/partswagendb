@@ -28,9 +28,16 @@ def list_expenses(
     _: CurrentUser,
     vehicle_id: int | None = None,
     paid_by_id: int | None = None,
+    general: bool = Query(
+        default=False, description="Only overheads that belong to no particular car"
+    ),
 ) -> list[VehicleExpense]:
     query = select(VehicleExpense).options(selectinload(VehicleExpense.paid_by))
-    if vehicle_id is not None:
+    if general:
+        # Food, supplies, tooling: real money on the ledger, but not part of
+        # any one car's cost basis.
+        query = query.where(VehicleExpense.vehicle_id.is_(None))
+    elif vehicle_id is not None:
         query = query.where(VehicleExpense.vehicle_id == vehicle_id)
     if paid_by_id is not None:
         query = query.where(VehicleExpense.paid_by_id == paid_by_id)

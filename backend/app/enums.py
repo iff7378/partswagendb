@@ -52,6 +52,9 @@ class ExpenseCategory(StrEnum):
     DISPOSAL = "disposal"
     STORAGE = "storage"
     FEES = "fees"
+    # Overheads that belong to the venture rather than to any one car.
+    SUPPLIES = "supplies"
+    MEALS = "meals"
     OTHER = "other"
 
 
