@@ -132,3 +132,23 @@ def test_unreadable_upload_falls_back_to_storing_it_untouched() -> None:
     from app.services.storage import normalise_original
 
     assert normalise_original(b"this is not an image") is None
+
+
+def test_finds_a_vin_on_a_sticker() -> None:
+    from app.services.ocr import find_vins
+
+    assert find_vins("VIN: 3VWFE21C04M000001  GVWR 1800KG") == ["3VWFE21C04M000001"]
+
+
+def test_recovers_a_vin_misread_with_letter_lookalikes() -> None:
+    """A VIN never contains I, O or Q, so any the OCR reports is a misread digit."""
+    from app.services.ocr import find_vins
+
+    assert find_vins("VIN 3VWFE21CO4MOOOOO1") == ["3VWFE21C04M000001"]
+
+
+def test_ignores_seventeen_character_non_vins() -> None:
+    from app.services.ocr import find_vins
+
+    assert find_vins("12345678901234567") == []
+    assert find_vins("ABCDEFGHJKLMNPRST") == []

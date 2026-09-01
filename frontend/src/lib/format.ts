@@ -1,4 +1,4 @@
-import type { PartCondition, PartStatus } from './types'
+import type { PartCondition, PartStatus, VehicleStatus } from './types'
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
@@ -64,4 +64,35 @@ export function signedMoney(value: string): { text: string; className: string } 
   return amount > 0
     ? { text: `+${money(amount)}`, className: 'text-emerald-700' }
     : { text: money(amount), className: 'text-rose-700' }
+}
+
+export const VEHICLE_STATUS_LABELS: Record<VehicleStatus, string> = {
+  acquired: 'Acquired',
+  in_teardown: 'In teardown',
+  stripped: 'Stripped',
+  scrapped: 'Scrapped',
+}
+
+export const VEHICLE_STATUS_HINTS: Record<VehicleStatus, string> = {
+  acquired: 'Bought, teardown not started',
+  in_teardown: 'Actively pulling parts',
+  stripped: 'Parts are out, shell still here',
+  scrapped: 'Shell has gone to the yard',
+}
+
+export const VEHICLE_STATUS_STYLES: Record<VehicleStatus, string> = {
+  acquired: 'bg-sky-100 text-sky-800 ring-sky-200',
+  in_teardown: 'bg-amber-100 text-amber-800 ring-amber-200',
+  stripped: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
+  scrapped: 'bg-slate-200 text-slate-700 ring-slate-300',
+}
+
+/** "3 days" / "2 months" — a rough age is easier to read than a day count. */
+export function humanAge(days: number): string {
+  if (days <= 0) return 'today'
+  if (days === 1) return '1 day'
+  if (days < 60) return `${days} days`
+  const months = Math.round(days / 30)
+  if (months < 24) return `${months} months`
+  return `${Math.round(days / 365)} years`
 }

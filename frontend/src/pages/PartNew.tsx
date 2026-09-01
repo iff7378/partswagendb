@@ -33,6 +33,7 @@ export default function PartNew() {
   const [partNumber, setPartNumber] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [notes, setNotes] = useState('')
+  const [ageAlert, setAgeAlert] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
   const [justSaved, setJustSaved] = useState<Saved | null>(null)
@@ -75,6 +76,7 @@ export default function PartNew() {
         asking_price: price ? price : null,
         part_number: partNumber.trim() || null,
         notes: notes.trim() || null,
+        age_alert_days: ageAlert ? Number(ageAlert) : null,
         // Anything with a price and a home is ready to sell; the rest stays a draft.
         status: price && locationId && categoryId ? 'available' : 'draft',
       })
@@ -259,6 +261,20 @@ export default function PartNew() {
               />
             </Field>
           </div>
+
+          <Field label="Nag me if it has not sold in" hint="Shows up on the dashboard.">
+            <select
+              className="field"
+              value={ageAlert}
+              onChange={(e) => setAgeAlert(e.target.value)}
+            >
+              <option value="">Never</option>
+              <option value="30">30 days</option>
+              <option value="60">60 days</option>
+              <option value="90">90 days</option>
+              <option value="180">6 months</option>
+            </select>
+          </Field>
 
           <Field label="Part number" hint="Leave blank and let OCR fill it in from a photo.">
             <input

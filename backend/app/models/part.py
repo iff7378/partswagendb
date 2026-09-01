@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -61,6 +62,9 @@ class Part(Base, TimestampMixin):
 
     notes: Mapped[str | None] = mapped_column(Text)
 
+    # Flag the part once it has sat this many days. Null means never nag.
+    age_alert_days: Mapped[int | None] = mapped_column(Integer)
+
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     created_by: Mapped["User | None"] = relationship()
 
@@ -69,6 +73,24 @@ class Part(Base, TimestampMixin):
         back_populates="part", cascade="all, delete-orphan", order_by="Photo.id"
     )
     sale_items: Mapped[list["SaleItem"]] = relationship(back_populates="part")
+
+    @property
+    def days_in_stock(self) -> int:
+        """Days since the part was catalogued."""
+        created = self.created_at
+        if created is None:
+            return 0
+        now = datetime.now(UTC) if created.tzinfo else datetime.now()
+        return max(0, (now - created).days)
+
+    @property
+    def is_overdue(self) -> bool:
+        """Sitting longer than its own threshold, and still sellable."""
+        if self.age_alert_days is None:
+            return False
+        if self.status not in (PartStatus.AVAILABLE, PartStatus.DRAFT):
+            return False
+        return self.days_in_stock >= self.age_alert_days
 
     @property
     def is_complete(self) -> bool:

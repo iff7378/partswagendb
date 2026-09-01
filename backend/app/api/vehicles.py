@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_, select
 
+from app.config import settings
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.enums import PartStatus
 from app.models import Part, Sale, SaleItem, Vehicle, VehicleExpense
@@ -15,6 +16,8 @@ from app.schemas.vehicle import (
 )
 from app.services.identifiers import next_vehicle_stock_number
 from app.services.ledger import ZERO, money
+from app.services.ocr import extract_text, find_vins
+from app.services.storage import ALLOWED_CONTENT_TYPES
 from app.services.vin import decode_vin
 
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
@@ -43,6 +46,45 @@ async def decode(vin: str, _: CurrentUser) -> VinDecodeResult:
             detail="Could not decode this VIN right now. Enter the details manually.",
         )
     return result
+
+
+@router.post("/scan-vin", response_model=VinDecodeResult)
+async def scan_vin(_: RequireEditor, file: UploadFile = File(...)) -> VinDecodeResult:
+    """Read a VIN off a photo of a registration sticker, title or door jamb.
+
+    Printed VINs OCR far more reliably than stamped part numbers, so this is
+    usually quicker than typing seventeen characters by hand.
+    """
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported image type {content_type}",
+        )
+
+    data = await file.read()
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Image is too large"
+        )
+
+    candidates = find_vins(extract_text(data))
+    if not candidates:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No VIN found in that photo. Try a closer, straighter shot.",
+        )
+
+    # Decoding also proves the VIN is real rather than a plausible-looking misread.
+    for vin in candidates:
+        decoded = await decode_vin(vin)
+        if decoded and decoded.make:
+            return decoded
+
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=f'Read "{candidates[0]}" but no vehicle matches it. Check the photo or type it in.',
+    )
 
 
 @router.get("", response_model=Page[VehicleRead])

@@ -1,4 +1,7 @@
+import { useQuery } from '@tanstack/react-query'
 import { NavLink, Outlet } from 'react-router-dom'
+
+import { api } from '../lib/api'
 
 import { useAuth } from '../lib/auth'
 
@@ -79,6 +82,7 @@ export default function Layout() {
 
       <main className="mx-auto max-w-6xl px-4 pb-28 pt-5 md:pb-10">
         <Outlet />
+        <VersionFooter />
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
@@ -89,6 +93,22 @@ export default function Layout() {
         ))}
       </nav>
     </div>
+  )
+}
+
+/** Reads the running backend rather than a build-time constant, so it always
+ *  reflects what is actually deployed. */
+function VersionFooter() {
+  const { data } = useQuery({
+    queryKey: ['version'],
+    queryFn: () => api.get<{ status: string; version: string }>('/health'),
+    staleTime: 60 * 60 * 1000,
+  })
+
+  return (
+    <p className="mt-10 text-center text-xs text-ink-soft">
+      PartsWagen {data?.version ?? '…'}
+    </p>
   )
 }
 

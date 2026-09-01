@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import QrScanner from '../components/QrScannerLazy'
 import { ErrorNote, Field, PageHeader, Spinner, StatusChip } from '../components/ui'
 import { api, download } from '../lib/api'
-import { CONDITION_LABELS, STATUS_LABELS, date, money } from '../lib/format'
+import { CONDITION_LABELS, STATUS_LABELS, date, humanAge, money } from '../lib/format'
 import { useAuth } from '../lib/auth'
 import type {
   Category,
@@ -196,6 +196,12 @@ export default function PartDetailPage() {
             </Row>
             <Row label="Condition">{CONDITION_LABELS[p.condition]}</Row>
             <Row label="Quantity">{p.quantity}</Row>
+            <Row label="In stock for">
+              <span className={p.is_overdue ? 'font-semibold text-rose-700' : undefined}>
+                {humanAge(p.days_in_stock)}
+                {p.age_alert_days ? ` · flags at ${p.age_alert_days}d` : ''}
+              </span>
+            </Row>
             <Row label="Stored at">{p.location?.path ?? 'Not put away'}</Row>
             <Row label="Category">{p.category?.path ?? '—'}</Row>
             <Row label="Donor car">
@@ -279,6 +285,7 @@ function EditForm({
     quantity: String(part.quantity),
     asking_price: part.asking_price ?? '',
     notes: part.notes ?? '',
+    age_alert_days: part.age_alert_days ? String(part.age_alert_days) : '',
     vehicle_id: part.vehicle_id ? String(part.vehicle_id) : '',
     category_id: part.category_id ? String(part.category_id) : '',
     location_id: part.location_id ? String(part.location_id) : '',
@@ -316,6 +323,7 @@ function EditForm({
           oem_number: form.oem_number || null,
           manufacturer: form.manufacturer || null,
           notes: form.notes || null,
+          age_alert_days: form.age_alert_days ? Number(form.age_alert_days) : null,
           vehicle_id: form.vehicle_id ? Number(form.vehicle_id) : null,
           category_id: form.category_id ? Number(form.category_id) : null,
           location_id: form.location_id ? Number(form.location_id) : null,
@@ -444,6 +452,21 @@ function EditForm({
             value={form.oem_number}
             onChange={(e) => set('oem_number', e.target.value)}
           />
+        </Field>
+
+        <Field label="Nag me after" hint="Flags the part once it has sat this long.">
+          <select
+            className="field"
+            value={form.age_alert_days}
+            onChange={(e) => set('age_alert_days', e.target.value)}
+          >
+            <option value="">Never</option>
+            <option value="30">30 days</option>
+            <option value="60">60 days</option>
+            <option value="90">90 days</option>
+            <option value="180">6 months</option>
+            <option value="365">1 year</option>
+          </select>
         </Field>
       </div>
 

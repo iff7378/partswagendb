@@ -60,6 +60,9 @@ class PartBase(BaseModel):
     quantity: int = Field(default=1, ge=0)
     asking_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     notes: str | None = None
+    age_alert_days: int | None = Field(
+        default=None, ge=1, le=3650, description="Flag the part after this many days in stock"
+    )
 
 
 class PartCreate(PartBase):
@@ -81,6 +84,7 @@ class PartUpdate(BaseModel):
     quantity: int | None = Field(default=None, ge=0)
     asking_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     notes: str | None = None
+    age_alert_days: int | None = Field(default=None, ge=1, le=3650)
     tags: list[str] | None = None
 
 
@@ -102,6 +106,8 @@ class PartRead(PartBase, ORMModel):
     sku: str
     status: PartStatus
     is_complete: bool
+    days_in_stock: int
+    is_overdue: bool
     created_at: datetime
     updated_at: datetime
     vehicle: VehicleBrief | None = None

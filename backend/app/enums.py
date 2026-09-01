@@ -8,9 +8,15 @@ class UserRole(StrEnum):
 
 
 class VehicleStatus(StrEnum):
+    """Where a donor car is in its life.
+
+    Stripped means the worthwhile parts are out but the shell is still on the
+    property; scrapped means the shell has gone to the yard.
+    """
+
     ACQUIRED = "acquired"
-    TEARDOWN = "teardown"
-    COMPLETE = "complete"
+    IN_TEARDOWN = "in_teardown"
+    STRIPPED = "stripped"
     SCRAPPED = "scrapped"
 
 

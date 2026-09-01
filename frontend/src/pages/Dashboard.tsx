@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { ErrorNote, PageHeader, Spinner, Stat } from '../components/ui'
 import { api } from '../lib/api'
-import { money } from '../lib/format'
+import { humanAge, money } from '../lib/format'
 import type { DashboardStats, Page, Part } from '../lib/types'
 
 export default function Dashboard() {
@@ -15,6 +15,11 @@ export default function Dashboard() {
   const drafts = useQuery({
     queryKey: ['parts', 'needs-details'],
     queryFn: () => api.get<Page<Part>>('/parts?needs_details=true&limit=5'),
+  })
+
+  const aging = useQuery({
+    queryKey: ['parts', 'aging'],
+    queryFn: () => api.get<Page<Part>>('/parts?aging=true&sort=oldest&limit=5'),
   })
 
   if (stats.isLoading) return <Spinner />
@@ -39,12 +44,49 @@ export default function Dashboard() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat label="In stock" value={s.parts_available} />
         <Stat label="Needs details" value={s.parts_draft} tone={s.parts_draft > 0 ? 'bad' : 'good'} />
+        <Stat
+          label="Sitting too long"
+          value={s.parts_overdue}
+          tone={s.parts_overdue > 0 ? 'bad' : 'good'}
+        />
         <Stat label="Sold" value={s.parts_sold} />
         <Stat label="Donor cars" value={s.vehicles_total} />
       </div>
+
+      {(aging.data?.items.length ?? 0) > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-end justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+              Sitting too long
+            </h2>
+            <Link to="/parts?aging=true&sort=oldest" className="text-sm font-medium text-rust">
+              See all
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {aging.data?.items.map((part) => (
+              <Link
+                key={part.id}
+                to={`/parts/${part.id}`}
+                className="card flex items-center gap-3 p-3 transition hover:border-rust"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{part.title}</p>
+                  <p className="truncate text-xs text-ink-soft">
+                    {part.sku} · {money(part.asking_price)}
+                  </p>
+                </div>
+                <span className="whitespace-nowrap text-sm font-medium text-rose-700">
+                  {humanAge(part.days_in_stock)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-ink-soft">
         Last 30 days

@@ -9,7 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import CurrentUser, DbSession
-from app.enums import PartStatus
+from app.db import days_since
+from app.enums import PartStatus, VehicleStatus
 from app.models import Part, Sale, SaleItem, Vehicle, VehicleExpense
 from app.services.ledger import ZERO, money
 
@@ -21,6 +22,7 @@ class DashboardStats(BaseModel):
     parts_available: int
     parts_draft: int
     parts_sold: int
+    parts_overdue: int
     vehicles_total: int
     vehicles_in_teardown: int
     revenue_last_30_days: Decimal
@@ -57,9 +59,16 @@ def dashboard(db: DbSession, _: CurrentUser) -> DashboardStats:
         parts_available=count_parts(Part.status == PartStatus.AVAILABLE),
         parts_draft=count_parts(Part.status == PartStatus.DRAFT),
         parts_sold=count_parts(Part.status == PartStatus.SOLD),
+        parts_overdue=count_parts(
+            Part.age_alert_days.is_not(None),
+            Part.status.in_([PartStatus.AVAILABLE, PartStatus.DRAFT]),
+            days_since(Part.created_at) >= Part.age_alert_days,
+        ),
         vehicles_total=db.execute(select(func.count()).select_from(Vehicle)).scalar_one(),
         vehicles_in_teardown=db.execute(
-            select(func.count()).select_from(Vehicle).where(Vehicle.status == "teardown")
+            select(func.count())
+            .select_from(Vehicle)
+            .where(Vehicle.status == VehicleStatus.IN_TEARDOWN)
         ).scalar_one(),
         revenue_last_30_days=money(revenue) if revenue else ZERO,
         expenses_last_30_days=money(expenses) if expenses else ZERO,

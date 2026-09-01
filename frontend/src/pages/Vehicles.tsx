@@ -6,15 +6,8 @@ import { Link } from 'react-router-dom'
 import { EmptyState, ErrorNote, Field, PageHeader, Spinner } from '../components/ui'
 import { api, ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { date } from '../lib/format'
-import type { Page, Vehicle, VehicleStatus, VinDecodeResult } from '../lib/types'
-
-const STATUS_STYLES: Record<VehicleStatus, string> = {
-  acquired: 'bg-sky-100 text-sky-800 ring-sky-200',
-  teardown: 'bg-amber-100 text-amber-800 ring-amber-200',
-  complete: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
-  scrapped: 'bg-slate-200 text-slate-700 ring-slate-300',
-}
+import { VEHICLE_STATUS_LABELS, VEHICLE_STATUS_STYLES, date } from '../lib/format'
+import type { Page, Vehicle, VinDecodeResult } from '../lib/types'
 
 export default function Vehicles() {
   const { canEdit } = useAuth()
@@ -63,7 +56,9 @@ export default function Vehicles() {
                 <p className="truncate font-semibold">{v.display_name}</p>
                 <p className="text-xs text-ink-soft">{v.stock_number}</p>
               </div>
-              <span className={`chip ${STATUS_STYLES[v.status]}`}>{v.status}</span>
+              <span className={`chip ${VEHICLE_STATUS_STYLES[v.status]}`}>
+                {VEHICLE_STATUS_LABELS[v.status]}
+              </span>
             </div>
             <dl className="mt-3 space-y-1 text-xs text-ink-soft">
               {v.vin && (

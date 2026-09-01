@@ -98,6 +98,33 @@ def extract_text(data: bytes) -> str | None:
         return None
 
 
+# A VIN is 17 characters and deliberately excludes I, O and Q so they cannot be
+# confused with 1 and 0 — which means any of those the OCR reports is certainly
+# a misread digit.
+_VIN_LOOKALIKES = str.maketrans({"I": "1", "O": "0", "Q": "0"})
+_VIN_PATTERN = re.compile(r"\b([A-HJ-NPR-Z0-9IOQ]{17})\b")
+
+
+def find_vins(text: str | None) -> list[str]:
+    """Pull candidate VINs out of OCR output, best first.
+
+    Registration stickers and titles print the VIN plainly, so this is far more
+    reliable than reading a stamped part number.
+    """
+    if not text:
+        return []
+
+    seen: list[str] = []
+    for match in _VIN_PATTERN.finditer(text.upper()):
+        vin = match.group(1).translate(_VIN_LOOKALIKES)
+        # A real VIN mixes letters and digits; 17 digits is a serial number.
+        if vin.isdigit() or vin.isalpha():
+            continue
+        if vin not in seen:
+            seen.append(vin)
+    return seen
+
+
 def find_part_numbers(text: str | None) -> list[dict[str, Any]]:
     """Rank plausible part numbers found in OCR output, best first."""
     if not text:

@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { ErrorNote, Field, PageHeader, Spinner, Stat, StatusChip } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { date, money } from '../lib/format'
+import { VEHICLE_STATUS_HINTS, VEHICLE_STATUS_LABELS, date, money } from '../lib/format'
 import type {
   Expense,
   ExpenseCategory,
@@ -15,9 +15,10 @@ import type {
   User,
   VehicleDetail,
   VehicleStatus,
+  VinDecodeResult,
 } from '../lib/types'
 
-const STATUSES: VehicleStatus[] = ['acquired', 'teardown', 'complete', 'scrapped']
+const STATUSES: VehicleStatus[] = ['acquired', 'in_teardown', 'stripped', 'scrapped']
 
 const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'purchase',
@@ -34,6 +35,7 @@ export default function VehicleDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { canEdit } = useAuth()
+  const [editing, setEditing] = useState(false)
 
   const vehicle = useQuery({
     queryKey: ['vehicle', id],
@@ -79,20 +81,30 @@ export default function VehicleDetailPage() {
         subtitle={`${v.stock_number}${v.vin ? ` · ${v.vin}` : ''}`}
         actions={
           canEdit && (
-            <select
-              className="field !w-auto"
-              value={v.status}
-              onChange={(e) => setStatus.mutate(e.target.value as VehicleStatus)}
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s[0].toUpperCase() + s.slice(1)}
-                </option>
-              ))}
-            </select>
+            <>
+              <select
+                className="field !w-auto"
+                value={v.status}
+                onChange={(e) => setStatus.mutate(e.target.value as VehicleStatus)}
+                title={VEHICLE_STATUS_HINTS[v.status]}
+              >
+                {STATUSES.map((st) => (
+                  <option key={st} value={st}>
+                    {VEHICLE_STATUS_LABELS[st]}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn-secondary" onClick={() => setEditing(!editing)}>
+                {editing ? 'Cancel' : 'Edit car'}
+              </button>
+            </>
           )
         }
       />
+
+      <p className="-mt-3 mb-4 text-sm text-ink-soft">{VEHICLE_STATUS_HINTS[v.status]}</p>
+
+      {editing && <EditVehicle vehicle={v} onDone={() => setEditing(false)} />}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Parts pulled" value={v.part_count} />
@@ -114,6 +126,7 @@ export default function VehicleDetailPage() {
           <Row label="Engine">{v.engine ?? '—'}</Row>
           <Row label="Transmission">{v.transmission ?? '—'}</Row>
           <Row label="Body">{v.body_style ?? '—'}</Row>
+          <Row label="Colour">{v.color ?? '—'}</Row>
           <Row label="Drive">{v.drive_type ?? '—'}</Row>
           <Row label="Mileage">{v.mileage?.toLocaleString() ?? '—'}</Row>
           <Row label="Acquired">{date(v.acquired_on)}</Row>
@@ -457,5 +470,243 @@ function ExpenseRow({ expense, canEdit }: { expense: Expense; canEdit: boolean }
         </button>
       </div>
     </li>
+  )
+}
+
+function EditVehicle({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () => void }) {
+  const queryClient = useQueryClient()
+  const vinFile = useRef<HTMLInputElement>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const [form, setForm] = useState({
+    vin: vehicle.vin ?? '',
+    year: vehicle.year ? String(vehicle.year) : '',
+    make: vehicle.make ?? '',
+    model: vehicle.model ?? '',
+    trim: vehicle.trim ?? '',
+    engine: vehicle.engine ?? '',
+    transmission: vehicle.transmission ?? '',
+    drive_type: vehicle.drive_type ?? '',
+    body_style: vehicle.body_style ?? '',
+    color: vehicle.color ?? '',
+    mileage: vehicle.mileage ? String(vehicle.mileage) : '',
+    acquired_on: vehicle.acquired_on ?? '',
+    acquired_from: vehicle.acquired_from ?? '',
+    notes: vehicle.notes ?? '',
+  })
+
+  function set<K extends keyof typeof form>(key: K, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  /** Fill blanks from a decode without clobbering anything already typed. */
+  function applyDecode(d: VinDecodeResult) {
+    setForm((prev) => ({
+      ...prev,
+      vin: d.vin,
+      year: prev.year || (d.year ? String(d.year) : ''),
+      make: prev.make || (d.make ?? ''),
+      model: prev.model || (d.model ?? ''),
+      trim: prev.trim || (d.trim ?? ''),
+      engine: prev.engine || (d.engine ?? ''),
+      transmission: prev.transmission || (d.transmission ?? ''),
+      drive_type: prev.drive_type || (d.drive_type ?? ''),
+      body_style: prev.body_style || (d.body_style ?? ''),
+    }))
+  }
+
+  const decode = useMutation({
+    mutationFn: (vin: string) => api.get<VinDecodeResult>(`/vehicles/decode/${vin}`),
+    onSuccess: (d) => {
+      applyDecode(d)
+      setNote(`Decoded ${[d.year, d.make, d.model, d.trim].filter(Boolean).join(' ')}`)
+    },
+  })
+
+  const scan = useMutation({
+    mutationFn: (file: File) => {
+      const body = new FormData()
+      body.append('file', file)
+      return api.upload<VinDecodeResult>('/vehicles/scan-vin', body)
+    },
+    onSuccess: (d) => {
+      applyDecode(d)
+      setNote(`Read ${d.vin} — ${[d.year, d.make, d.model].filter(Boolean).join(' ')}`)
+      if (vinFile.current) vinFile.current.value = ''
+    },
+  })
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/vehicles/${vehicle.id}`, {
+        vin: form.vin.trim() || null,
+        year: form.year ? Number(form.year) : null,
+        make: form.make || null,
+        model: form.model || null,
+        trim: form.trim || null,
+        engine: form.engine || null,
+        transmission: form.transmission || null,
+        drive_type: form.drive_type || null,
+        body_style: form.body_style || null,
+        color: form.color || null,
+        mileage: form.mileage ? Number(form.mileage) : null,
+        acquired_on: form.acquired_on || null,
+        acquired_from: form.acquired_from || null,
+        notes: form.notes || null,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['vehicle', String(vehicle.id)] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      onDone()
+    },
+  })
+
+  return (
+    <form
+      className="card mb-5 space-y-4 p-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        save.mutate()
+      }}
+    >
+      <ErrorNote error={save.error ?? decode.error ?? scan.error} />
+      {note && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{note}</p>
+      )}
+
+      <Field label="VIN" hint="17 characters. Decoding fills in whatever is still blank.">
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="field font-mono uppercase"
+            value={form.vin}
+            onChange={(e) => set('vin', e.target.value.toUpperCase())}
+            maxLength={17}
+          />
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={form.vin.trim().length !== 17 || decode.isPending}
+            onClick={() => decode.mutate(form.vin.trim())}
+          >
+            {decode.isPending ? 'Looking…' : 'Decode'}
+          </button>
+        </div>
+      </Field>
+
+      <Field
+        label="Or read the VIN from a photo"
+        hint="A registration sticker, the title, or the door jamb plate."
+      >
+        <input
+          ref={vinFile}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="field"
+          disabled={scan.isPending}
+          onChange={(e) => e.target.files?.[0] && scan.mutate(e.target.files[0])}
+        />
+      </Field>
+      {scan.isPending && <p className="text-sm text-ink-soft">Reading the photo…</p>}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Year">
+          <input
+            className="field"
+            inputMode="numeric"
+            value={form.year}
+            onChange={(e) => set('year', e.target.value)}
+          />
+        </Field>
+        <Field label="Make">
+          <input className="field" value={form.make} onChange={(e) => set('make', e.target.value)} />
+        </Field>
+        <Field label="Model">
+          <input
+            className="field"
+            value={form.model}
+            onChange={(e) => set('model', e.target.value)}
+          />
+        </Field>
+        <Field label="Trim">
+          <input className="field" value={form.trim} onChange={(e) => set('trim', e.target.value)} />
+        </Field>
+        <Field label="Engine">
+          <input
+            className="field"
+            value={form.engine}
+            onChange={(e) => set('engine', e.target.value)}
+          />
+        </Field>
+        <Field label="Transmission">
+          <input
+            className="field"
+            value={form.transmission}
+            onChange={(e) => set('transmission', e.target.value)}
+          />
+        </Field>
+        <Field label="Drive">
+          <input
+            className="field"
+            value={form.drive_type}
+            onChange={(e) => set('drive_type', e.target.value)}
+          />
+        </Field>
+        <Field label="Body">
+          <input
+            className="field"
+            value={form.body_style}
+            onChange={(e) => set('body_style', e.target.value)}
+          />
+        </Field>
+        <Field label="Colour">
+          <input
+            className="field"
+            value={form.color}
+            onChange={(e) => set('color', e.target.value)}
+          />
+        </Field>
+        <Field label="Mileage">
+          <input
+            className="field"
+            inputMode="numeric"
+            value={form.mileage}
+            onChange={(e) => set('mileage', e.target.value)}
+          />
+        </Field>
+        <Field label="Acquired on">
+          <input
+            type="date"
+            className="field"
+            value={form.acquired_on}
+            onChange={(e) => set('acquired_on', e.target.value)}
+          />
+        </Field>
+        <Field label="Bought from">
+          <input
+            className="field"
+            value={form.acquired_from}
+            onChange={(e) => set('acquired_from', e.target.value)}
+          />
+        </Field>
+      </div>
+
+      <Field label="Notes">
+        <textarea
+          className="field"
+          rows={2}
+          value={form.notes}
+          onChange={(e) => set('notes', e.target.value)}
+        />
+      </Field>
+
+      <div className="flex gap-2">
+        <button type="submit" className="btn-primary" disabled={save.isPending}>
+          {save.isPending ? 'Saving…' : 'Save changes'}
+        </button>
+        <button type="button" className="btn-secondary" onClick={onDone}>
+          Cancel
+        </button>
+      </div>
+    </form>
   )
 }

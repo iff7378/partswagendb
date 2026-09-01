@@ -2,7 +2,7 @@ export type UserRole = 'admin' | 'staff' | 'viewer'
 
 export type PartStatus = 'draft' | 'available' | 'reserved' | 'sold' | 'scrapped'
 export type PartCondition = 'new' | 'a' | 'b' | 'c' | 'core' | 'salvage' | 'unknown'
-export type VehicleStatus = 'acquired' | 'teardown' | 'complete' | 'scrapped'
+export type VehicleStatus = 'acquired' | 'in_teardown' | 'stripped' | 'scrapped'
 export type LocationKind = 'site' | 'shelf' | 'bay' | 'bin'
 export type SaleChannel = 'ebay' | 'facebook' | 'local' | 'phone' | 'other'
 export type ExpenseCategory =
@@ -148,6 +148,9 @@ export interface Part {
   asking_price: string | null
   notes: string | null
   is_complete: boolean
+  days_in_stock: number
+  is_overdue: boolean
+  age_alert_days: number | null
   created_at: string
   updated_at: string
   vehicle: VehicleBrief | null
@@ -255,6 +258,7 @@ export interface DashboardStats {
   parts_available: number
   parts_draft: number
   parts_sold: number
+  parts_overdue: number
   vehicles_total: number
   vehicles_in_teardown: number
   revenue_last_30_days: string

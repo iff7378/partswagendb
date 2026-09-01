@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 
 import { EmptyState, ErrorNote, PageHeader, Spinner, StatusChip } from '../components/ui'
 import { api, download } from '../lib/api'
-import { CONDITION_LABELS, money } from '../lib/format'
+import { CONDITION_LABELS, humanAge, money } from '../lib/format'
 import type { Category, Page, Part, StorageLocation, Tag, Vehicle } from '../lib/types'
 
 const STATUSES = ['available', 'draft', 'reserved', 'sold', 'scrapped'] as const
@@ -157,15 +157,41 @@ export default function Parts() {
           </div>
         )}
 
-        <label className="flex items-center gap-2 text-sm text-ink-soft">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
-            checked={params.get('needs_details') === 'true'}
-            onChange={(e) => setParam('needs_details', e.target.checked ? 'true' : '')}
-          />
-          Only parts still missing details
-        </label>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-ink-soft">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
+              checked={params.get('needs_details') === 'true'}
+              onChange={(e) => setParam('needs_details', e.target.checked ? 'true' : '')}
+            />
+            Only parts still missing details
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-ink-soft">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
+              checked={params.get('aging') === 'true'}
+              onChange={(e) => setParam('aging', e.target.checked ? 'true' : '')}
+            />
+            Only parts sitting too long
+          </label>
+
+          <label className="ml-auto flex items-center gap-2 text-sm text-ink-soft">
+            Sort
+            <select
+              className="field !w-auto !py-1.5 !text-sm"
+              value={params.get('sort') ?? 'newest'}
+              onChange={(e) => setParam('sort', e.target.value === 'newest' ? '' : e.target.value)}
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="price">Priciest first</option>
+              <option value="title">By name</option>
+            </select>
+          </label>
+        </div>
       </form>
 
       <ErrorNote error={parts.error} />
@@ -208,6 +234,14 @@ export default function Parts() {
               </div>
               <p className="text-xs text-ink-soft">
                 {part.sku} · {CONDITION_LABELS[part.condition]}
+              </p>
+              <p
+                className={`text-xs ${
+                  part.is_overdue ? 'font-medium text-rose-700' : 'text-ink-soft'
+                }`}
+              >
+                {part.is_overdue ? 'Sitting ' : 'In stock '}
+                {humanAge(part.days_in_stock)}
               </p>
               {part.vehicle && (
                 <p className="truncate text-xs text-ink-soft">{part.vehicle.display_name}</p>

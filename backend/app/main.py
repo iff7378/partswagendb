@@ -50,4 +50,5 @@ app.include_router(api_router)
 
 @app.get("/api/health", tags=["health"])
 def health() -> dict[str, str]:
+    """Also the source of the version the web interface displays."""
     return {"status": "ok", "version": __version__}

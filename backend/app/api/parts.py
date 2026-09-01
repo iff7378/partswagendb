@@ -1,8 +1,12 @@
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql.elements import UnaryExpression
 
 from app.core.deps import CurrentUser, DbSession, RequireEditor
+from app.db import days_since
 from app.enums import PartCondition, PartStatus
 from app.models import Location, Part, PartCategory, Tag, Vehicle
 from app.schemas.common import Message, Page
@@ -94,6 +98,8 @@ def list_parts(
     needs_details: bool = Query(
         default=False, description="Only parts missing category, location or price"
     ),
+    aging: bool = Query(default=False, description="Only parts past their own age alert"),
+    sort: str = Query(default="newest", pattern="^(newest|oldest|price|title)$"),
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ) -> Page[PartRead]:
@@ -133,8 +139,24 @@ def list_parts(
             )
         )
 
+    if aging:
+        # Postgres can do the date arithmetic, so ageing parts do not need
+        # every row pulled into Python to be counted.
+        query = query.where(
+            Part.age_alert_days.is_not(None),
+            Part.status.in_([PartStatus.AVAILABLE, PartStatus.DRAFT]),
+            days_since(Part.created_at) >= Part.age_alert_days,
+        )
+
+    order: dict[str, UnaryExpression[Any]] = {
+        "newest": Part.created_at.desc(),
+        "oldest": Part.created_at.asc(),
+        "price": Part.asking_price.desc().nullslast(),
+        "title": Part.title.asc(),
+    }
+
     total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
-    rows = db.execute(query.order_by(Part.created_at.desc()).limit(limit).offset(offset)).scalars()
+    rows = db.execute(query.order_by(order[sort]).limit(limit).offset(offset)).scalars()
 
     return Page[PartRead](
         items=[_to_read(p) for p in rows], total=total, limit=limit, offset=offset

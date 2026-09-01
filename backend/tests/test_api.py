@@ -363,3 +363,64 @@ def test_deleting_a_part_removes_its_photos_from_object_storage(
 
     assert client.delete(f"/api/parts/{part['id']}", headers=auth_headers).status_code == 200
     assert sorted(deleted) == ["parts/1/abc.jpg", "parts/1/abc_thumb.jpg"]
+
+
+def test_aging_filter_only_returns_parts_past_their_own_threshold(
+    client: TestClient, db: Session, auth_headers
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import Part
+
+    now = datetime.now(UTC)
+    db.add_all(
+        [
+            Part(
+                sku="P-OLD",
+                title="Overdue",
+                age_alert_days=30,
+                status="available",
+                created_at=now - timedelta(days=45),
+            ),
+            Part(
+                sku="P-NEW",
+                title="Fresh",
+                age_alert_days=30,
+                status="available",
+                created_at=now - timedelta(days=5),
+            ),
+            Part(
+                sku="P-NONE",
+                title="No threshold",
+                status="available",
+                created_at=now - timedelta(days=900),
+            ),
+            Part(
+                sku="P-SOLD",
+                title="Old but sold",
+                age_alert_days=30,
+                status="sold",
+                created_at=now - timedelta(days=99),
+            ),
+        ]
+    )
+    db.commit()
+
+    body = client.get("/api/parts?aging=true", headers=auth_headers).json()
+    assert [p["sku"] for p in body["items"]] == ["P-OLD"]
+
+
+def test_parts_can_be_sorted(client: TestClient, auth_headers) -> None:
+    for title in ("Banana", "Apple"):
+        client.post("/api/parts", headers=auth_headers, json={"title": title})
+
+    ordered = client.get("/api/parts?sort=title", headers=auth_headers).json()
+    assert [p["title"] for p in ordered["items"]] == ["Apple", "Banana"]
+
+
+def test_part_exposes_its_age(client: TestClient, auth_headers) -> None:
+    part = client.post(
+        "/api/parts", headers=auth_headers, json={"title": "Alternator", "age_alert_days": 30}
+    ).json()
+    assert part["days_in_stock"] == 0
+    assert part["is_overdue"] is False

@@ -20,11 +20,79 @@ export default function Settings() {
     <>
       <PageHeader title="Settings" subtitle={`Signed in as ${user?.email}`} />
       <div className="space-y-6">
+        <YourProfile />
         <ChangePassword />
         {isAdmin && <People />}
         {isAdmin && <Categories />}
       </div>
     </>
+  )
+}
+
+function YourProfile() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const [fullName, setFullName] = useState(user?.full_name ?? '')
+  const [email, setEmail] = useState(user?.email ?? '')
+  const [done, setDone] = useState(false)
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.patch(`/users/${user!.id}`, { full_name: fullName.trim(), email: email.trim() }),
+    onSuccess: () => {
+      setDone(true)
+      // The name shows in the header and on every "who paid" dropdown.
+      void queryClient.invalidateQueries({ queryKey: ['users'] })
+      window.location.reload()
+    },
+  })
+
+  const unchanged = fullName.trim() === user?.full_name && email.trim() === user?.email
+
+  return (
+    <section className="card p-4">
+      <h2 className="mb-3 font-semibold">Your details</h2>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          setDone(false)
+          save.mutate()
+        }}
+      >
+        <ErrorNote error={save.error} />
+        {done && (
+          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900">Saved.</p>
+        )}
+
+        <Field label="Display name" hint="Shown in the header and on every sale and expense.">
+          <input
+            className="field"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+          />
+        </Field>
+
+        <Field label="Email" hint="Also what you sign in with.">
+          <input
+            type="email"
+            className="field"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </Field>
+
+        <button
+          type="submit"
+          className="btn-primary"
+          disabled={save.isPending || unchanged || !fullName.trim()}
+        >
+          {save.isPending ? 'Saving…' : 'Save'}
+        </button>
+      </form>
+    </section>
   )
 }
 
@@ -161,16 +229,26 @@ function People() {
         {users.data?.map((u) => (
           <li key={u.id} className="space-y-3 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate font-medium">
-                  {u.full_name}
+              <div className="min-w-0 flex-1">
+                <input
+                  className="field !py-1.5 font-medium"
+                  defaultValue={u.full_name}
+                  aria-label={`Display name for ${u.email}`}
+                  onBlur={(e) => {
+                    const name = e.target.value.trim()
+                    if (name && name !== u.full_name) {
+                      update.mutate({ id: u.id, patch: { full_name: name } })
+                    }
+                  }}
+                />
+                <p className="mt-1 truncate text-xs text-ink-soft">
+                  {u.email}
                   {!u.is_active && (
                     <span className="ml-2 chip bg-slate-200 text-slate-700 ring-slate-300">
                       disabled
                     </span>
                   )}
                 </p>
-                <p className="truncate text-xs text-ink-soft">{u.email}</p>
               </div>
 
               <select
