@@ -12,6 +12,10 @@ import type { Category, Page, PartCondition, PartDetail, StorageLocation, Vehicl
 // twenty parts off one car into one bay, and re-picking each time is friction.
 const STICKY_VEHICLE = 'pw.lastVehicle'
 const STICKY_LOCATION = 'pw.lastLocation'
+const STICKY_AGE_ALERT = 'pw.lastAgeAlert'
+
+// Most parts are worth chasing after a couple of months.
+const DEFAULT_AGE_ALERT_DAYS = '60'
 
 interface Saved {
   id: number
@@ -33,7 +37,9 @@ export default function PartNew() {
   const [partNumber, setPartNumber] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [notes, setNotes] = useState('')
-  const [ageAlert, setAgeAlert] = useState('')
+  const [ageAlert, setAgeAlert] = useState(
+    () => localStorage.getItem(STICKY_AGE_ALERT) ?? DEFAULT_AGE_ALERT_DAYS,
+  )
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
   const [justSaved, setJustSaved] = useState<Saved | null>(null)
@@ -63,6 +69,9 @@ export default function PartNew() {
   useEffect(() => {
     if (locationId) localStorage.setItem(STICKY_LOCATION, locationId)
   }, [locationId])
+  useEffect(() => {
+    localStorage.setItem(STICKY_AGE_ALERT, ageAlert)
+  }, [ageAlert])
 
   const save = useMutation({
     mutationFn: async ({ andAnother }: { andAnother: boolean }) => {
@@ -137,9 +146,15 @@ export default function PartNew() {
         <ErrorNote error={save.error} />
 
         <div className="card space-y-3 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
-            Staying put between saves
-          </p>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+              Car and shelf
+            </p>
+            <p className="mt-1 text-sm text-ink-soft">
+              These two stay selected after each save, so you can work through a whole car
+              without picking them again.
+            </p>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Donor car">
               <select
@@ -262,7 +277,10 @@ export default function PartNew() {
             </Field>
           </div>
 
-          <Field label="Nag me if it has not sold in" hint="Shows up on the dashboard.">
+          <Field
+            label="Flag it if unsold after"
+            hint="It then shows up under 'Sitting too long' on the home page."
+          >
             <select
               className="field"
               value={ageAlert}
