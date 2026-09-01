@@ -16,15 +16,18 @@ interface Props {
 }
 
 export default function SaleLines({ lines, onChange, keepPartIds = [] }: Props) {
-  // Draft and reserved parts count: filtering to available only is how stock
-  // ends up invisible at the till.
+  // Draft parts count: filtering to available only is how stock ends up
+  // invisible at the till. Anything already on another sale is excluded
+  // server-side, so the picker cannot offer something it would then reject.
   const sellable = useQuery({
     queryKey: ['parts', 'sellable'],
     queryFn: () => api.get<Page<Part>>('/parts?sellable=true&limit=200'),
   })
+  // Parts on the sale being edited are excluded by that same rule, so they
+  // are fetched separately or they would silently drop off on save.
   const onSale = useQuery({
     queryKey: ['parts', 'on-sale', keepPartIds.join(',')],
-    queryFn: () => api.get<Page<Part>>(`/parts?status=sold&limit=200`),
+    queryFn: () => api.get<Page<Part>>('/parts?limit=200'),
     enabled: keepPartIds.length > 0,
   })
 

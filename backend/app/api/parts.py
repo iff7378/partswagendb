@@ -128,11 +128,14 @@ def list_parts(
     if part_status:
         query = query.where(Part.status == part_status)
     if sellable:
-        # A draft is still a real thing on a shelf, and a reserved part can
-        # have its hold turned into a sale. Filtering to available only is how
-        # stock ends up invisible at the till.
+        # A draft is still a real thing on a shelf. Filtering to available only
+        # is how stock ends up invisible at the till.
+        #
+        # Anything already on a sale is excluded even though it is reserved:
+        # it is spoken for, and offering it would only earn a 409 on save.
         query = query.where(
-            Part.status.in_([PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED])
+            Part.status.in_([PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED]),
+            ~Part.sale_items.any(),
         )
     if condition:
         query = query.where(Part.condition == condition)

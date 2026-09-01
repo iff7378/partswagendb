@@ -1,4 +1,10 @@
-import type { ExpenseCategory, PartCondition, PartStatus, VehicleStatus } from './types'
+import type {
+  ExpenseCategory,
+  PartCondition,
+  PartStatus,
+  SaleState,
+  VehicleStatus,
+} from './types'
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
@@ -120,4 +126,25 @@ export function bytes(value: number): string {
     i += 1
   }
   return `${n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`
+}
+
+export const SALE_STATE_LABELS: Record<SaleState, string> = {
+  pending: 'Agreed',
+  paid: 'Paid, not collected',
+  gone: 'Gone, not paid',
+  complete: 'Done',
+}
+
+export const SALE_STATE_HINTS: Record<SaleState, string> = {
+  pending: 'Agreed to sell. The parts are held but still on the shelf.',
+  paid: 'Money is in. The parts are still here waiting to be collected.',
+  gone: 'The parts have left but the money has not landed yet.',
+  complete: 'Paid for and gone.',
+}
+
+export const SALE_STATE_STYLES: Record<SaleState, string> = {
+  pending: 'bg-slate-100 text-slate-700 ring-slate-200',
+  paid: 'bg-sky-100 text-sky-800 ring-sky-200',
+  gone: 'bg-amber-100 text-amber-900 ring-amber-200',
+  complete: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
 }

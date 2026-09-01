@@ -8,8 +8,33 @@ import type { Line } from '../lib/saleLines'
 import { EmptyState, ErrorNote, Field, PageHeader, Spinner } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { date, money } from '../lib/format'
-import type { Page, Sale, SaleChannel, SaleDetail, User } from '../lib/types'
+import {
+  SALE_STATE_HINTS,
+  SALE_STATE_LABELS,
+  SALE_STATE_STYLES,
+  date,
+  money,
+} from '../lib/format'
+import type { Page, Sale, SaleChannel, SaleDetail, SaleState, User } from '../lib/types'
+
+const STATE_FILTERS: { value: string; label: string }[] = [
+  { value: '', label: 'Everything' },
+  { value: 'pending', label: 'Agreed, nothing moved' },
+  { value: 'paid', label: 'Paid, awaiting collection' },
+  { value: 'gone', label: 'Gone, still owed for' },
+  { value: 'complete', label: 'Done' },
+]
+
+function StateChip({ state }: { state: SaleState }) {
+  return (
+    <span
+      className={`chip ring-1 ${SALE_STATE_STYLES[state]}`}
+      title={SALE_STATE_HINTS[state]}
+    >
+      {SALE_STATE_LABELS[state]}
+    </span>
+  )
+}
 
 /** Turn a saved sale back into editable lines. */
 function toLines(sale: SaleDetail): Line[] {
@@ -37,11 +62,18 @@ const CHANNEL_LABELS: Record<SaleChannel, string> = {
 export default function Sales() {
   const { canEdit } = useAuth()
   const [adding, setAdding] = useState(false)
+  const [state, setState] = useState('')
 
   const sales = useQuery({
-    queryKey: ['sales'],
-    queryFn: () => api.get<Page<Sale>>('/sales?limit=100'),
+    queryKey: ['sales', state],
+    queryFn: () =>
+      api.get<Page<Sale>>(`/sales?limit=100${state ? `&state=${state}` : ''}`),
   })
+
+  // What is agreed but not yet in the bank. Worth seeing without hunting.
+  const owed = (sales.data?.items ?? [])
+    .filter((sale) => sale.paid_on === null)
+    .reduce((sum, sale) => sum + Number(sale.net_collected), 0)
 
   return (
     <>
@@ -56,6 +88,28 @@ export default function Sales() {
           )
         }
       />
+
+      <div className="card mb-5 flex flex-wrap items-center gap-3 p-4">
+        <label className="flex items-center gap-2 text-sm text-ink-soft">
+          Showing
+          <select
+            className="field !w-auto !py-1.5 !text-sm"
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+          >
+            {STATE_FILTERS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {owed > 0 && (
+          <p className="ml-auto text-sm text-ink-soft">
+            <strong className="text-amber-900">{money(owed)}</strong> agreed but not paid
+          </p>
+        )}
+      </div>
 
       {adding && <NewSaleForm onDone={() => setAdding(false)} />}
 
@@ -89,6 +143,10 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
     fees: '',
     tax: '',
   })
+  // Most sales are a walk-in paying cash and walking off with the part, so
+  // that is the default; the other states are one click away.
+  const [paid, setPaid] = useState(true)
+  const [gone, setGone] = useState(true)
   const [lines, setLines] = useState<Line[]>([{ ...EMPTY_LINE }])
 
   const users = useQuery({
@@ -100,6 +158,8 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
     mutationFn: () =>
       api.post('/sales', {
         sold_on: form.sold_on,
+        paid_on: paid ? form.sold_on : null,
+        fulfilled_on: gone ? form.sold_on : null,
         channel: form.channel,
         buyer_name: form.buyer_name || null,
         collected_by_id: Number(form.collected_by_id),
@@ -183,6 +243,37 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
 
       <SaleLines lines={lines} onChange={setLines} />
 
+      <fieldset className="rounded-lg border border-slate-200 p-3">
+        <legend className="px-1 text-sm font-semibold">Where has it got to?</legend>
+        <label className="flex items-center gap-2 py-1 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
+            checked={paid}
+            onChange={(e) => setPaid(e.target.checked)}
+          />
+          The money has landed
+        </label>
+        <label className="flex items-center gap-2 py-1 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
+            checked={gone}
+            onChange={(e) => setGone(e.target.checked)}
+          />
+          The parts have been collected or shipped
+        </label>
+        <p className="mt-1 text-xs text-ink-soft">
+          {paid && gone
+            ? 'Done. The money counts today and the parts leave stock.'
+            : paid
+              ? 'Paid for. The parts stay on the shelf, held for this buyer.'
+              : gone
+                ? 'Gone but still owed for. It will not count as income until you mark it paid.'
+                : 'Just agreed. The parts are held, and nothing hits the books yet.'}
+        </p>
+      </fieldset>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Shipping">
           <input
@@ -247,6 +338,13 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   }
 
+  // Marking paid or collected is a patch like any other, but it moves stock
+  // and the ledger, so it refreshes everything a sale can touch.
+  const advance = useMutation({
+    mutationFn: (patch: Record<string, string>) => api.patch(`/sales/${sale.id}`, patch),
+    onSuccess: refresh,
+  })
+
   const voidSale = useMutation({
     mutationFn: () => api.delete(`/sales/${sale.id}`),
     onSuccess: () => {
@@ -266,9 +364,10 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
         onClick={() => setOpen(!open)}
       >
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">
+          <p className="flex flex-wrap items-center gap-2 truncate text-sm font-medium">
             {sale.buyer_name || 'Walk-in buyer'}{' '}
             <span className="font-normal text-ink-soft">via {CHANNEL_LABELS[sale.channel]}</span>
+            <StateChip state={sale.state} />
           </p>
           <p className="text-xs text-ink-soft">
             {sale.reference} · {date(sale.sold_on)} · collected by {sale.collected_by.full_name}
@@ -285,7 +384,7 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
 
       {open && (
         <div className="mt-3 space-y-3 border-t border-slate-100 pt-3">
-          <ErrorNote error={detail.error ?? voidSale.error} />
+          <ErrorNote error={detail.error ?? voidSale.error ?? advance.error} />
           {detail.isLoading && <Spinner label="Loading the sale…" />}
 
           {detail.data && !editing && (
@@ -341,6 +440,32 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
 
               {canEdit && (
                 <div className="flex flex-wrap gap-2">
+                  {!detail.data.paid_on && (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={advance.isPending}
+                      onClick={() =>
+                        advance.mutate({ paid_on: new Date().toISOString().slice(0, 10) })
+                      }
+                    >
+                      Mark paid
+                    </button>
+                  )}
+                  {!detail.data.fulfilled_on && (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={advance.isPending}
+                      onClick={() =>
+                        advance.mutate({
+                          fulfilled_on: new Date().toISOString().slice(0, 10),
+                        })
+                      }
+                    >
+                      Mark collected
+                    </button>
+                  )}
                   <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>
                     Edit
                   </button>

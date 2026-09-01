@@ -244,6 +244,36 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           <strong>Who took the money</strong> is the important field. It is what the settle-up
           report is built on.
         </P>
+        <P>
+          A sale tracks two things separately, because they rarely happen together:{' '}
+          <strong>the money landing</strong> and <strong>the parts leaving</strong>. Tick both
+          when you record it and the sale is done; leave either unticked and it sits in the list
+          until you mark it. Use the buttons on the sale to move it along.
+        </P>
+        <Bullets
+          items={[
+            <>
+              <strong>Agreed</strong> — someone has said yes. The parts are held for them but
+              still on your shelf, and nothing has hit the books.
+            </>,
+            <>
+              <strong>Paid, not collected</strong> — the money counts from the day it landed.
+              The parts stay put until collection.
+            </>,
+            <>
+              <strong>Gone, not paid</strong> — the parts have left. It does not count as income
+              until you mark it paid.
+            </>,
+            <>
+              <strong>Done</strong> — both.
+            </>,
+          ]}
+        />
+        <Note>
+          Income counts on the day the money <em>landed</em>, not the day the deal was struck.
+          A sale you are still owed for is not cash anyone is holding, so it cannot change who
+          owes whom. The Sales page shows the outstanding total at the top.
+        </Note>
         <Note>
           You cannot mark a part &ldquo;Sold&rdquo; by hand. Selling is what a sale record{' '}
           <em>is</em> — doing it by hand used to take parts out of stock with no money and no
@@ -332,6 +362,14 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           <>
             <strong>A shell can only be scrapped once.</strong> If a car is missing from the
             scrap list, it has already been weighed in.
+          </>,
+          <>
+            <strong>A car is only marked scrapped once the shell has actually gone.</strong>{' '}
+            Agreeing a price with the yard is not the same as it leaving the property.
+          </>,
+          <>
+            <strong>Parts on an unpaid sale do not show in the picker.</strong> They are
+            reserved for that buyer. Void or edit that sale to free them.
           </>,
           <>
             <strong>Per-car profit will not add up to the venture&rsquo;s profit.</strong> Shared

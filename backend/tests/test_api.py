@@ -801,17 +801,29 @@ def test_a_part_cannot_be_on_two_sales(client: TestClient, auth_headers, admin) 
     assert first.json()["reference"] in second.json()["detail"]
 
 
-def test_the_sellable_filter_includes_drafts_and_reserved(client: TestClient, auth_headers) -> None:
+def test_the_sellable_filter_includes_drafts_but_not_spoken_for_stock(
+    client: TestClient, auth_headers, admin
+) -> None:
     _part(client, auth_headers, "A draft")
     _part(client, auth_headers, "Available", status="available")
-    _part(client, auth_headers, "Reserved", status="reserved")
     _part(client, auth_headers, "Scrapped", status="scrapped")
+    spoken_for = _part(client, auth_headers, "On a pending sale", status="available")
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [spoken_for["id"]], "unit_price": "85.00"}],
+        },
+    )
 
     titles = {
         p["title"]
         for p in client.get("/api/parts?sellable=true", headers=auth_headers).json()["items"]
     }
-    assert titles == {"A draft", "Available", "Reserved"}
+    # Reserved on another sale is not sellable: offering it would only 409.
+    assert titles == {"A draft", "Available"}
 
 
 def test_missing_filter_picks_one_gap_at_a_time(client: TestClient, auth_headers) -> None:

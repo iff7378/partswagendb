@@ -4,6 +4,7 @@ export type PartStatus = 'draft' | 'available' | 'reserved' | 'sold' | 'scrapped
 export type PartCondition = 'new' | 'a' | 'b' | 'c' | 'core' | 'salvage' | 'unknown'
 export type VehicleStatus = 'acquired' | 'in_teardown' | 'stripped' | 'scrapped'
 export type LocationKind = 'site' | 'shelf' | 'bay' | 'bin'
+export type SaleState = 'pending' | 'paid' | 'gone' | 'complete'
 export type SaleChannel = 'ebay' | 'facebook' | 'local' | 'phone' | 'scrap' | 'other'
 export type ExpenseCategory =
   | 'purchase'
@@ -195,6 +196,9 @@ export interface Sale {
   id: number
   reference: string
   sold_on: string
+  paid_on: string | null
+  fulfilled_on: string | null
+  state: SaleState
   channel: SaleChannel
   buyer_name: string | null
   buyer_contact: string | null
