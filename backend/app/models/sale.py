@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, Numeric, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -13,6 +13,14 @@ if TYPE_CHECKING:
     from app.models.part import Part
     from app.models.user import User
     from app.models.vehicle import Vehicle
+
+
+sale_item_parts = Table(
+    "sale_item_parts",
+    Base.metadata,
+    Column("sale_item_id", ForeignKey("sale_items.id", ondelete="CASCADE"), primary_key=True),
+    Column("part_id", ForeignKey("parts.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Sale(Base, TimestampMixin):
@@ -69,18 +77,23 @@ class SaleItem(Base, TimestampMixin):
     )
     sale: Mapped["Sale"] = relationship(back_populates="items")
 
-    part_id: Mapped[int | None] = mapped_column(
-        ForeignKey("parts.id", ondelete="SET NULL"), index=True
+    # A line covers however many parts went for one price. One part is the
+    # common case; several is a lot ("the whole interior"); none is either a
+    # shell or something that was never catalogued.
+    parts: Mapped[list["Part"]] = relationship(
+        secondary=sale_item_parts, back_populates="sale_items"
     )
-    part: Mapped["Part | None"] = relationship(back_populates="sale_items")
 
-    # A line can instead be a whole car: the stripped shell weighed in at the
-    # yard. It is not a Part -- it never had a SKU, a shelf or a photo -- but
-    # the money is real revenue and belongs against the car it came from.
+    # Which car the money belongs to. Set for a lot or a shell, where there is
+    # no part to derive it from, so the car's profit still adds up.
     vehicle_id: Mapped[int | None] = mapped_column(
         ForeignKey("vehicles.id", ondelete="SET NULL"), index=True
     )
     vehicle: Mapped["Vehicle | None"] = relationship(back_populates="sale_items")
+
+    # The car itself went to the yard, as opposed to a lot of parts off it.
+    # Only this flips the car to scrapped.
+    is_shell: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Snapshot so the sale record survives the part being edited or deleted.
     description: Mapped[str] = mapped_column(String(255), nullable=False)

@@ -9,20 +9,32 @@ from app.schemas.user import UserBrief
 
 
 class SaleItemCreate(BaseModel):
-    part_id: int | None = None
-    # Set instead of part_id when the line is a whole car going for scrap.
+    """One line: whatever went for one price.
+
+    Any number of parts, optionally against a car. A lot names the car so the
+    money still lands on it when the pieces were never catalogued separately.
+    """
+
+    part_ids: list[int] = Field(default_factory=list)
     vehicle_id: int | None = None
+    is_shell: bool = False
     description: str | None = Field(default=None, max_length=255)
     quantity: int = Field(default=1, gt=0)
     unit_price: Decimal = Field(ge=0, decimal_places=2)
 
 
+class SaleItemPart(ORMModel):
+    id: int
+    sku: str
+    title: str
+
+
 class SaleItemRead(ORMModel):
     id: int
-    part_id: int | None = None
-    part_sku: str | None = None
+    parts: list[SaleItemPart] = Field(default_factory=list)
     vehicle_id: int | None = None
     vehicle_name: str | None = None
+    is_shell: bool = False
     description: str
     quantity: int
     unit_price: Decimal
@@ -57,6 +69,9 @@ class SaleUpdate(BaseModel):
     collected_by_id: int | None = None
     payment_method: str | None = None
     notes: str | None = None
+    # Omit to leave the lines alone; send a full replacement set to change what
+    # sold, so a mistyped sale can be corrected without voiding it.
+    items: list[SaleItemCreate] | None = None
 
 
 class SaleRead(SaleBase, ORMModel):

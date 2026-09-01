@@ -99,6 +99,9 @@ def list_parts(
         default=False, description="Only parts missing category, location or price"
     ),
     aging: bool = Query(default=False, description="Only parts past their own age alert"),
+    sellable: bool = Query(
+        default=False, description="Only parts that could go on a sale: draft, available, reserved"
+    ),
     sort: str = Query(default="newest", pattern="^(newest|oldest|price|title)$"),
     limit: int = Query(default=50, le=200),
     offset: int = 0,
@@ -119,6 +122,13 @@ def list_parts(
         )
     if part_status:
         query = query.where(Part.status == part_status)
+    if sellable:
+        # A draft is still a real thing on a shelf, and a reserved part can
+        # have its hold turned into a sale. Filtering to available only is how
+        # stock ends up invisible at the till.
+        query = query.where(
+            Part.status.in_([PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED])
+        )
     if condition:
         query = query.where(Part.condition == condition)
     if vehicle_id is not None:
@@ -198,6 +208,25 @@ def update_part(db: DbSession, _: RequireEditor, part_id: int, payload: PartUpda
     part = _get_or_404(db, part_id)
     updates = payload.model_dump(exclude_unset=True, exclude={"tags"})
     _validate_references(db, updates)
+
+    # Sold is not a label you apply; it is what being on a sale means. Setting
+    # it by hand was how parts left stock with no money and no collector on
+    # record, which the settle-up report then quietly missed.
+    if updates.get("status") == PartStatus.SOLD and part.status != PartStatus.SOLD:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Record a sale to mark a part sold, so the money is tracked with it",
+        )
+    # Equally, a part cannot be quietly taken back off a sale.
+    if (
+        part.status == PartStatus.SOLD
+        and updates.get("status", PartStatus.SOLD) != PartStatus.SOLD
+        and part.sale_items
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This part is on a sale. Void or edit that sale to put it back in stock",
+        )
 
     for field, value in updates.items():
         setattr(part, field, value)

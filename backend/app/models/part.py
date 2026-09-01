@@ -72,7 +72,9 @@ class Part(Base, TimestampMixin):
     photos: Mapped[list["Photo"]] = relationship(
         back_populates="part", cascade="all, delete-orphan", order_by="Photo.id"
     )
-    sale_items: Mapped[list["SaleItem"]] = relationship(back_populates="part")
+    sale_items: Mapped[list["SaleItem"]] = relationship(
+        secondary="sale_item_parts", back_populates="parts"
+    )
 
     @property
     def days_in_stock(self) -> int:

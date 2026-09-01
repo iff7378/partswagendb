@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 
 from app.config import settings
 from app.core.deps import CurrentUser, DbSession, RequireEditor
@@ -189,18 +189,27 @@ def get_vehicle(db: DbSession, _: CurrentUser, vehicle_id: int) -> VehicleDetail
         select(func.sum(VehicleExpense.amount)).where(VehicleExpense.vehicle_id == vehicle_id)
     ).scalar_one_or_none()
 
-    # Revenue attributable to this vehicle: sale lines for parts that came off
-    # it, plus the line for the shell itself if it has been weighed in.
+    # Revenue attributable to this car: lines named against it, plus lines
+    # whose parts came off it. Picked out as distinct line ids first, because a
+    # lot line joins once per part and would otherwise be counted several times.
     line_total = func.sum(SaleItem.unit_price * SaleItem.quantity)
-    revenue = db.execute(
-        select(line_total)
-        .select_from(SaleItem)
-        .outerjoin(Part, Part.id == SaleItem.part_id)
-        .where(or_(Part.vehicle_id == vehicle_id, SaleItem.vehicle_id == vehicle_id))
-    ).scalar_one_or_none()
+    attributed = (
+        select(SaleItem.id)
+        .outerjoin(SaleItem.parts)
+        .where(
+            or_(
+                SaleItem.vehicle_id == vehicle_id,
+                # A line naming a car has already been counted by that car, so
+                # its parts must not drag it onto a second one.
+                and_(SaleItem.vehicle_id.is_(None), Part.vehicle_id == vehicle_id),
+            )
+        )
+        .distinct()
+    )
+    revenue = db.execute(select(line_total).where(SaleItem.id.in_(attributed))).scalar_one_or_none()
 
     scrap = db.execute(
-        select(line_total).where(SaleItem.vehicle_id == vehicle_id)
+        select(line_total).where(SaleItem.vehicle_id == vehicle_id, SaleItem.is_shell.is_(True))
     ).scalar_one_or_none()
 
     total_expenses = money(expenses) if expenses else ZERO

@@ -228,7 +228,7 @@ def test_sold_parts_do_not_break_revenue_attribution(db: Session, make_user) -> 
 
     sale = Sale(reference="S26-0001", sold_on=PERIOD_END, collected_by_id=partner.id)
     sale.items.append(
-        SaleItem(part_id=part.id, description="Alternator", quantity=2, unit_price=Decimal("75.00"))
+        SaleItem(parts=[part], description="Alternator", quantity=2, unit_price=Decimal("75.00"))
     )
     db.add(sale)
     db.commit()

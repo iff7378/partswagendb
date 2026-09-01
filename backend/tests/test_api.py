@@ -213,7 +213,7 @@ def test_selling_a_part_marks_it_sold(client: TestClient, auth_headers, admin) -
         json={
             "sold_on": "2026-08-15",
             "collected_by_id": admin.id,
-            "items": [{"part_id": part["id"], "unit_price": "85.00", "quantity": 1}],
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00", "quantity": 1}],
         },
     )
     assert sale.status_code == 201, sale.text
@@ -232,7 +232,7 @@ def test_a_part_cannot_be_sold_twice(client: TestClient, auth_headers, admin) ->
     payload = {
         "sold_on": "2026-08-15",
         "collected_by_id": admin.id,
-        "items": [{"part_id": part["id"], "unit_price": "85.00"}],
+        "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
     }
 
     assert client.post("/api/sales", headers=auth_headers, json=payload).status_code == 201
@@ -250,7 +250,7 @@ def test_voiding_a_sale_returns_the_part_to_stock(client: TestClient, auth_heade
         json={
             "sold_on": "2026-08-15",
             "collected_by_id": admin.id,
-            "items": [{"part_id": part["id"], "unit_price": "85.00"}],
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
         },
     ).json()
 
@@ -301,7 +301,7 @@ def test_scrapping_a_car_records_revenue_against_it(
             "channel": "scrap",
             "buyer_name": "Ace Metals",
             "collected_by_id": admin.id,
-            "items": [{"vehicle_id": car["id"], "unit_price": "180.00"}],
+            "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
         },
     )
     assert sale.status_code == 201, sale.text
@@ -323,7 +323,7 @@ def test_a_car_cannot_be_scrapped_twice(client: TestClient, auth_headers, admin)
     payload = {
         "sold_on": "2026-08-20",
         "collected_by_id": admin.id,
-        "items": [{"vehicle_id": car["id"], "unit_price": "180.00"}],
+        "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
     }
 
     assert client.post("/api/sales", headers=auth_headers, json=payload).status_code == 201
@@ -340,7 +340,7 @@ def test_voiding_a_scrap_sale_puts_the_car_back_to_stripped(
         json={
             "sold_on": "2026-08-20",
             "collected_by_id": admin.id,
-            "items": [{"vehicle_id": car["id"], "unit_price": "180.00"}],
+            "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
         },
     ).json()
 
@@ -350,7 +350,7 @@ def test_voiding_a_scrap_sale_puts_the_car_back_to_stripped(
     assert detail["scrap_revenue"] == "0.00"
 
 
-def test_a_sale_line_cannot_be_both_a_part_and_a_car(
+def test_a_scrapped_shell_line_cannot_also_list_parts(
     client: TestClient, auth_headers, admin
 ) -> None:
     car = _car(client, auth_headers)
@@ -363,7 +363,12 @@ def test_a_sale_line_cannot_be_both_a_part_and_a_car(
             "sold_on": "2026-08-20",
             "collected_by_id": admin.id,
             "items": [
-                {"vehicle_id": car["id"], "part_id": part["id"], "unit_price": "180.00"},
+                {
+                    "vehicle_id": car["id"],
+                    "is_shell": True,
+                    "part_ids": [part["id"]],
+                    "unit_price": "180.00",
+                },
             ],
         },
     )
@@ -387,8 +392,8 @@ def test_scrap_revenue_is_separate_from_parts_revenue(
             "sold_on": "2026-08-18",
             "collected_by_id": admin.id,
             "items": [
-                {"part_id": part["id"], "unit_price": "85.00"},
-                {"vehicle_id": car["id"], "unit_price": "180.00"},
+                {"part_ids": [part["id"]], "unit_price": "85.00"},
+                {"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"},
             ],
         },
     )
@@ -606,3 +611,176 @@ def test_entering_a_vin_clears_the_unknown_flag(client: TestClient, auth_headers
     ).json()
     assert updated["vin"] == "3VWFE21C04M000001"
     assert updated["vin_unknown"] is False
+
+
+def _part(client: TestClient, auth_headers, title: str, **extra) -> dict:
+    return client.post("/api/parts", headers=auth_headers, json={"title": title, **extra}).json()
+
+
+def test_a_lot_sells_several_parts_for_one_price(client: TestClient, auth_headers, admin) -> None:
+    car = _car(client, auth_headers, nickname="The silver wagon")
+    seats = _part(client, auth_headers, "Seats", vehicle_id=car["id"], status="available")
+    dash = _part(client, auth_headers, "Dashboard", vehicle_id=car["id"], status="available")
+    trim = _part(client, auth_headers, "Door cards", vehicle_id=car["id"])  # still a draft
+
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [
+                {
+                    "part_ids": [seats["id"], dash["id"], trim["id"]],
+                    "vehicle_id": car["id"],
+                    "description": "Entire interior",
+                    "unit_price": "400.00",
+                }
+            ],
+        },
+    )
+    assert sale.status_code == 201, sale.text
+    line = sale.json()["items"][0]
+    assert line["description"] == "Entire interior"
+    assert sorted(p["title"] for p in line["parts"]) == ["Dashboard", "Door cards", "Seats"]
+
+    # Every part in the lot leaves stock, drafts included.
+    for part in (seats, dash, trim):
+        assert client.get(f"/api/parts/{part['id']}", headers=auth_headers).json()["status"] == (
+            "sold"
+        )
+
+    # The lot is one line, so the car earns 400 once rather than once per part.
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["total_revenue"] == "400.00"
+    assert detail["scrap_revenue"] == "0.00"
+    assert detail["status"] != "scrapped"
+
+
+def test_a_lot_can_name_a_car_without_listing_parts(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers, nickname="The silver wagon")
+
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [
+                {
+                    "vehicle_id": car["id"],
+                    "description": "All the interior trim",
+                    "unit_price": "250.00",
+                }
+            ],
+        },
+    )
+    assert sale.status_code == 201, sale.text
+
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["total_revenue"] == "250.00"
+    # Selling parts off a car is not the same as junking the shell.
+    assert detail["status"] != "scrapped"
+    assert detail["scrap_revenue"] == "0.00"
+
+
+def test_a_part_cannot_be_marked_sold_by_hand(client: TestClient, auth_headers) -> None:
+    part = _part(client, auth_headers, "Alternator", status="available")
+
+    response = client.patch(
+        f"/api/parts/{part['id']}", headers=auth_headers, json={"status": "sold"}
+    )
+    assert response.status_code == 409
+    assert "Record a sale" in response.json()["detail"]
+
+
+def test_a_part_on_a_sale_cannot_be_put_back_by_hand(
+    client: TestClient, auth_headers, admin
+) -> None:
+    part = _part(client, auth_headers, "Alternator", status="available")
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    )
+
+    response = client.patch(
+        f"/api/parts/{part['id']}", headers=auth_headers, json={"status": "available"}
+    )
+    assert response.status_code == 409
+    assert "Void or edit that sale" in response.json()["detail"]
+
+
+def test_editing_a_sale_frees_dropped_parts_and_claims_new_ones(
+    client: TestClient, auth_headers, admin
+) -> None:
+    kept = _part(client, auth_headers, "Alternator", status="available")
+    dropped = _part(client, auth_headers, "Starter", status="available")
+    added = _part(client, auth_headers, "Radiator", status="available")
+
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-08-20",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [kept["id"], dropped["id"]], "unit_price": "150.00"}],
+        },
+    ).json()
+
+    fixed = client.patch(
+        f"/api/sales/{sale['id']}",
+        headers=auth_headers,
+        json={
+            "items": [
+                {
+                    "part_ids": [kept["id"], added["id"]],
+                    "description": "Alternator and radiator",
+                    "unit_price": "170.00",
+                }
+            ]
+        },
+    )
+    assert fixed.status_code == 200, fixed.text
+    assert fixed.json()["subtotal"] == "170.00"
+
+    def status_of(part: dict) -> str:
+        return client.get(f"/api/parts/{part['id']}", headers=auth_headers).json()["status"]
+
+    assert status_of(kept) == "sold"
+    assert status_of(added) == "sold"
+    assert status_of(dropped) == "available"
+
+
+def test_a_part_cannot_be_on_two_sales(client: TestClient, auth_headers, admin) -> None:
+    part = _part(client, auth_headers, "Alternator", status="available")
+    payload = {
+        "sold_on": "2026-08-20",
+        "collected_by_id": admin.id,
+        "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+    }
+
+    first = client.post("/api/sales", headers=auth_headers, json=payload)
+    assert first.status_code == 201
+    second = client.post("/api/sales", headers=auth_headers, json=payload)
+    assert second.status_code == 409
+    assert first.json()["reference"] in second.json()["detail"]
+
+
+def test_the_sellable_filter_includes_drafts_and_reserved(client: TestClient, auth_headers) -> None:
+    _part(client, auth_headers, "A draft")
+    _part(client, auth_headers, "Available", status="available")
+    _part(client, auth_headers, "Reserved", status="reserved")
+    _part(client, auth_headers, "Scrapped", status="scrapped")
+
+    titles = {
+        p["title"]
+        for p in client.get("/api/parts?sellable=true", headers=auth_headers).json()["items"]
+    }
+    assert titles == {"A draft", "Available", "Reserved"}
