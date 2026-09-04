@@ -148,3 +148,61 @@ export const SALE_STATE_STYLES: Record<SaleState, string> = {
   gone: 'bg-amber-100 text-amber-900 ring-amber-200',
   complete: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
 }
+
+/** "Sat, Sep 5 at 5:00 PM" — an instant, rendered in the reader's own zone. */
+export function dateTime(value: string | null | undefined): string {
+  if (!value) return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '—'
+  return parsed.toLocaleString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+/** Just the clock part, for rows already grouped under a day heading. */
+export function timeOfDay(value: string): string {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '—'
+  return parsed.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+/**
+ * An ISO instant as `<input type="datetime-local">` wants it: local wall clock,
+ * no zone. Going through the epoch keeps the offset correct either side of a
+ * daylight-saving change.
+ */
+export function toLocalInput(value: string | null): string {
+  if (!value) return ''
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  const offset = parsed.getTimezoneOffset() * 60_000
+  return new Date(parsed.getTime() - offset).toISOString().slice(0, 16)
+}
+
+/** The reverse: what the picker gives back, as a full instant for the API. */
+export function fromLocalInput(value: string): string | null {
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
+
+/** Today, tomorrow, overdue — the words you would actually use. */
+export function dayLabel(value: string): string {
+  const when = new Date(value)
+  const today = new Date()
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((startOf(when) - startOf(today)) / 86_400_000)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  if (days === -1) return 'Yesterday'
+  if (days < 0) return `${date(when.toISOString())} · overdue`
+  return when.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  })
+}

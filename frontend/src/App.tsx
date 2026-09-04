@@ -11,6 +11,7 @@ import PartDetailPage from './pages/PartDetail'
 import PartNew from './pages/PartNew'
 import Parts from './pages/Parts'
 import Sales from './pages/Sales'
+import SaleSchedule from './pages/SaleSchedule'
 import Help from './pages/Help'
 import Settings from './pages/Settings'
 import Locations from './pages/Locations'
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
         <Route path="/locations" element={<Locations />} />
         <Route path="/sales" element={<Sales />} />
+        <Route path="/sales/schedule" element={<SaleSchedule />} />
         <Route path="/money" element={<Money />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/help" element={<Help />} />

@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
 
 import SaleLines from '../components/SaleLines'
+import SalesTabs from '../components/SalesTabs'
 import { EMPTY_LINE, subtotalOf, toPayload } from '../lib/saleLines'
 import type { Line } from '../lib/saleLines'
 import { EmptyState, ErrorNote, Field, PageHeader, Spinner } from '../components/ui'
@@ -13,7 +15,10 @@ import {
   SALE_STATE_LABELS,
   SALE_STATE_STYLES,
   date,
+  dateTime,
+  fromLocalInput,
   money,
+  toLocalInput,
 } from '../lib/format'
 import type { Page, Sale, SaleChannel, SaleDetail, SaleState, User } from '../lib/types'
 
@@ -63,6 +68,9 @@ export default function Sales() {
   const { canEdit } = useAuth()
   const [adding, setAdding] = useState(false)
   const [state, setState] = useState('')
+  // Arriving from the schedule opens that sale straight away.
+  const [params] = useSearchParams()
+  const openId = Number(params.get('open')) || null
 
   const sales = useQuery({
     queryKey: ['sales', state],
@@ -88,6 +96,8 @@ export default function Sales() {
           )
         }
       />
+
+      <SalesTabs />
 
       <div className="card mb-5 flex flex-wrap items-center gap-3 p-4">
         <label className="flex items-center gap-2 text-sm text-ink-soft">
@@ -125,7 +135,12 @@ export default function Sales() {
 
       <div className="card divide-y divide-slate-100">
         {sales.data?.items.map((sale) => (
-          <SaleRow key={sale.id} sale={sale} canEdit={canEdit} />
+          <SaleRow
+            key={sale.id}
+            sale={sale}
+            canEdit={canEdit}
+            startOpen={sale.id === openId}
+          />
         ))}
       </div>
     </>
@@ -147,6 +162,7 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
   // that is the default; the other states are one click away.
   const [paid, setPaid] = useState(true)
   const [gone, setGone] = useState(true)
+  const [meetup, setMeetup] = useState('')
   const [lines, setLines] = useState<Line[]>([{ ...EMPTY_LINE }])
 
   const users = useQuery({
@@ -160,6 +176,7 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
         sold_on: form.sold_on,
         paid_on: paid ? form.sold_on : null,
         fulfilled_on: gone ? form.sold_on : null,
+        meetup_at: gone ? null : fromLocalInput(meetup),
         channel: form.channel,
         buyer_name: form.buyer_name || null,
         collected_by_id: Number(form.collected_by_id),
@@ -263,6 +280,22 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
           />
           The parts have been collected or shipped
         </label>
+        {!gone && (
+          <div className="mt-2">
+            <Field
+              label="When are they coming?"
+              hint="Shows up on the pickup schedule. Leave blank if it is not arranged yet."
+            >
+              <input
+                type="datetime-local"
+                className="field"
+                value={meetup}
+                onChange={(e) => setMeetup(e.target.value)}
+              />
+            </Field>
+          </div>
+        )}
+
         <p className="mt-1 text-xs text-ink-soft">
           {paid && gone
             ? 'Done. The money counts today and the parts leave stock.'
@@ -313,9 +346,17 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
   )
 }
 
-function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
+function SaleRow({
+  sale,
+  canEdit,
+  startOpen = false,
+}: {
+  sale: Sale
+  canEdit: boolean
+  startOpen?: boolean
+}) {
   const queryClient = useQueryClient()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(startOpen)
   const [editing, setEditing] = useState(false)
 
   // Line items only come back on the detail endpoint, so fetch on expand.
@@ -372,6 +413,11 @@ function SaleRow({ sale, canEdit }: { sale: Sale; canEdit: boolean }) {
           <p className="text-xs text-ink-soft">
             {sale.reference} · {date(sale.sold_on)} · collected by {sale.collected_by.full_name}
           </p>
+          {sale.meetup_at && !sale.fulfilled_on && (
+            <p className="text-xs font-medium text-rust">
+              Pickup {dateTime(sale.meetup_at)}
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="font-semibold tabular-nums">{money(sale.net_collected)}</p>
@@ -524,6 +570,7 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
     shipping: sale.shipping,
     fees: sale.fees,
     tax: sale.tax,
+    meetup_at: toLocalInput(sale.meetup_at),
   })
   const [lines, setLines] = useState<Line[]>(() => toLines(sale))
 
@@ -540,6 +587,7 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
     mutationFn: () =>
       api.patch(`/sales/${sale.id}`, {
         sold_on: form.sold_on,
+        meetup_at: fromLocalInput(form.meetup_at),
         channel: form.channel,
         buyer_name: form.buyer_name || null,
         collected_by_id: Number(form.collected_by_id),
@@ -631,6 +679,15 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
             inputMode="decimal"
             value={form.tax}
             onChange={(e) => setForm((p) => ({ ...p, tax: e.target.value }))}
+          />
+        </Field>
+
+        <Field label="When they are coming" hint="Clear it to take this off the schedule.">
+          <input
+            type="datetime-local"
+            className="field"
+            value={form.meetup_at}
+            onChange={(e) => setForm((p) => ({ ...p, meetup_at: e.target.value }))}
           />
         </Field>
       </div>

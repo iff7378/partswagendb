@@ -198,6 +198,8 @@ export interface Sale {
   sold_on: string
   paid_on: string | null
   fulfilled_on: string | null
+  /** ISO instant the buyer said they would turn up, or null. */
+  meetup_at: string | null
   state: SaleState
   channel: SaleChannel
   buyer_name: string | null
@@ -326,4 +328,31 @@ export interface AppMetrics {
   categories_total: number
   tags_total: number
   database_bytes: number | null
+}
+
+export interface SiteBrief {
+  id: number
+  name: string
+}
+
+export interface ScheduleEntry {
+  id: number
+  reference: string
+  state: SaleState
+  meetup_at: string | null
+  buyer_name: string | null
+  buyer_contact: string | null
+  channel: SaleChannel
+  net_collected: string
+  paid_on: string | null
+  summary: string
+  part_count: number
+  /** Derived from where the parts are kept; null when nothing is shelved. */
+  site: SiteBrief | null
+}
+
+export interface Schedule {
+  scheduled: ScheduleEntry[]
+  unscheduled: ScheduleEntry[]
+  sites: SiteBrief[]
 }

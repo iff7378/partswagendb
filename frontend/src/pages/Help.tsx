@@ -288,6 +288,52 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'schedule',
+    title: 'Pickups and meetup times',
+    body: (
+      <>
+        <P>
+          Most of this is arranged over Messenger: someone says they will come Thursday at five.
+          Put that time on the sale and it stops living in your phone.
+        </P>
+        <Steps
+          items={[
+            <>
+              When recording the sale, untick <em>collected or shipped</em> and a{' '}
+              <strong>When are they coming?</strong> field appears. Leave it blank if the time is
+              still being haggled over.
+            </>,
+            <>
+              <Link className="text-rust underline" to="/sales/schedule">
+                Sales → Pickup schedule
+              </Link>{' '}
+              lists everything still to hand over, grouped by day, so you are not opening sales
+              one at a time to find out who is due.
+            </>,
+            <>
+              When they turn up and take it, open the sale and hit{' '}
+              <em>Mark collected</em>. It drops off the schedule.
+            </>,
+          ]}
+        />
+        <P>
+          Each pickup shows the <strong>site</strong> its parts are stored at, so you know which
+          address to be at. That is worked out from where the parts live — you never type it in.
+          A sale of something that was never shelved shows no site.
+        </P>
+        <P>
+          Anything whose time has passed without being marked collected moves to{' '}
+          <strong>Should already have happened</strong> at the top, in red. Today&rsquo;s
+          pickups also show on the home page.
+        </P>
+        <Note>
+          Times are shown in whatever timezone the device is in, and stored as a precise moment
+          rather than a wall-clock time, so a phone and a laptop always agree.
+        </Note>
+      </>
+    ),
+  },
+  {
     id: 'scrapping',
     title: 'Scrapping a car',
     body: (

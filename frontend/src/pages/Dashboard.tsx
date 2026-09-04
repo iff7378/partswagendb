@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 
 import { ErrorNote, PageHeader, Spinner, Stat } from '../components/ui'
 import { api } from '../lib/api'
-import { humanAge, money } from '../lib/format'
-import type { DashboardStats, Page, Part } from '../lib/types'
+import { dateTime, humanAge, money } from '../lib/format'
+import type { DashboardStats, Page, Part, Schedule } from '../lib/types'
 
 export default function Dashboard() {
   const stats = useQuery({
@@ -15,6 +15,12 @@ export default function Dashboard() {
   const drafts = useQuery({
     queryKey: ['parts', 'needs-details'],
     queryFn: () => api.get<Page<Part>>('/parts?missing=location&limit=5'),
+  })
+
+  // Today's handovers, because that is the thing with a clock on it.
+  const schedule = useQuery({
+    queryKey: ['schedule', ''],
+    queryFn: () => api.get<Schedule>('/sales/schedule'),
   })
 
   const aging = useQuery({
@@ -55,6 +61,48 @@ export default function Dashboard() {
         <Stat label="Sold" value={s.parts_sold} />
         <Stat label="Donor cars" value={s.vehicles_total} />
       </div>
+
+      {(schedule.data?.scheduled.length ?? 0) > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-end justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+              Coming to collect
+            </h2>
+            <Link to="/sales/schedule" className="text-sm font-medium text-rust">
+              Whole schedule
+            </Link>
+          </div>
+          <div className="card divide-y divide-slate-100">
+            {schedule.data?.scheduled.slice(0, 4).map((entry) => (
+              <Link
+                key={entry.id}
+                to={`/sales?open=${entry.id}`}
+                className="flex items-center gap-3 px-4 py-3 transition hover:bg-slate-50"
+              >
+                <span
+                  className={`w-32 shrink-0 text-sm font-semibold ${
+                    new Date(entry.meetup_at!).getTime() < Date.now() ? 'text-rose-700' : ''
+                  }`}
+                >
+                  {dateTime(entry.meetup_at)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">
+                    {entry.buyer_name || 'Walk-in buyer'}
+                  </span>
+                  <span className="block truncate text-xs text-ink-soft">
+                    {entry.summary}
+                    {entry.site && ` · ${entry.site.name}`}
+                  </span>
+                </span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {money(entry.net_collected)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(aging.data?.items.length ?? 0) > 0 && (
         <div className="mt-8">
