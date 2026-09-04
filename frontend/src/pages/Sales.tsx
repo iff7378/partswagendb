@@ -191,6 +191,8 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
       // Scrapping a shell moves the car to scrapped, so both car views are stale.
       void queryClient.invalidateQueries({ queryKey: ['vehicle'] })
       void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+      void queryClient.invalidateQueries({ queryKey: ['vehicle-sales'] })
+      void queryClient.invalidateQueries({ queryKey: ['schedule'] })
       void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       onDone()
@@ -375,6 +377,8 @@ function SaleRow({
     // Voiding a scrap line puts the car back to stripped.
     void queryClient.invalidateQueries({ queryKey: ['vehicle'] })
     void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
+    void queryClient.invalidateQueries({ queryKey: ['vehicle-sales'] })
+    void queryClient.invalidateQueries({ queryKey: ['schedule'] })
     void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   }

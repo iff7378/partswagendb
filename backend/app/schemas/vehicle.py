@@ -124,3 +124,20 @@ class ExpenseRead(ExpenseBase, ORMModel):
     vehicle_id: int | None = None
     paid_by: UserBrief
     created_at: datetime
+
+
+class VehicleSaleLine(ORMModel):
+    """One line of income booked against a car, for its own ledger."""
+
+    sale_id: int
+    reference: str
+    sold_on: date
+    paid_on: date | None = None
+    state: str
+    buyer_name: str | None = None
+    description: str
+    is_shell: bool = False
+    quantity: int
+    line_total: Decimal
+    # How it reached this car: a line named against it, or one of its parts.
+    via: str

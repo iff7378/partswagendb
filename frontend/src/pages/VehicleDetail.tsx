@@ -6,7 +6,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ErrorNote, Field, PageHeader, Spinner, Stat, StatusChip } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { VEHICLE_STATUS_HINTS, VEHICLE_STATUS_LABELS, date, money } from '../lib/format'
+import {
+  SALE_STATE_LABELS,
+  SALE_STATE_STYLES,
+  VEHICLE_STATUS_HINTS,
+  VEHICLE_STATUS_LABELS,
+  date,
+  money,
+} from '../lib/format'
 import type {
   Expense,
   ExpenseCategory,
@@ -14,6 +21,7 @@ import type {
   Part,
   User,
   VehicleDetail,
+  VehicleSaleLine,
   VehicleStatus,
   VinDecodeResult,
 } from '../lib/types'
@@ -50,6 +58,11 @@ export default function VehicleDetailPage() {
   const expenses = useQuery({
     queryKey: ['expenses', 'vehicle', id],
     queryFn: () => api.get<Expense[]>(`/expenses?vehicle_id=${id}`),
+  })
+
+  const income = useQuery({
+    queryKey: ['vehicle-sales', id],
+    queryFn: () => api.get<VehicleSaleLine[]>(`/vehicles/${id}/sales`),
   })
 
   const remove = useMutation({
@@ -188,7 +201,57 @@ export default function VehicleDetailPage() {
           )}
         </section>
 
-        <section>
+        <section className="space-y-4">
+          <div className="card">
+            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-ink-soft">
+              Money in
+            </h2>
+            {income.data?.length === 0 && (
+              <p className="px-4 py-6 text-center text-sm text-ink-soft">
+                Nothing sold off this car yet.
+              </p>
+            )}
+            <ul className="divide-y divide-slate-100">
+              {income.data?.map((line) => (
+                <li
+                  key={`${line.sale_id}-${line.description}-${line.line_total}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {line.is_shell && (
+                        <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-ink-soft">
+                          Shell
+                        </span>
+                      )}
+                      {line.description}
+                    </p>
+                    <p className="text-xs text-ink-soft">
+                      <Link to={`/sales?open=${line.sale_id}`} className="hover:text-rust">
+                        {line.reference}
+                      </Link>{' '}
+                      · {date(line.sold_on)}
+                      {line.buyer_name && ` · ${line.buyer_name}`}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold tabular-nums">{money(line.line_total)}</p>
+                    {!line.paid_on && (
+                      <span className={`chip ring-1 ${SALE_STATE_STYLES[line.state]}`}>
+                        {SALE_STATE_LABELS[line.state]}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            {(income.data?.some((line) => !line.paid_on) ?? false) && (
+              <p className="border-t border-slate-100 px-4 py-2 text-xs text-ink-soft">
+                Unpaid lines are listed but do not count towards the profit above.
+              </p>
+            )}
+          </div>
+
           <div className="card">
             <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-ink-soft">
               Money spent
@@ -268,6 +331,8 @@ function ScrapPanel({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =>
     void queryClient.invalidateQueries({ queryKey: ['vehicles'] })
     void queryClient.invalidateQueries({ queryKey: ['expenses'] })
     void queryClient.invalidateQueries({ queryKey: ['sales'] })
+    void queryClient.invalidateQueries({ queryKey: ['vehicle-sales'] })
+    void queryClient.invalidateQueries({ queryKey: ['by-vehicle'] })
     void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   }
@@ -277,10 +342,24 @@ function ScrapPanel({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =>
       paidUs
         ? api.post('/sales', {
             sold_on: form.on,
+            // The yard has the shell and has paid: nothing is left to arrange,
+            // so this is done the moment it is recorded.
+            paid_on: form.on,
+            fulfilled_on: form.on,
             channel: 'scrap',
             buyer_name: form.yard.trim() || null,
             collected_by_id: Number(form.user_id),
-            items: [{ vehicle_id: vehicle.id, unit_price: form.amount || '0', quantity: 1 }],
+            items: [
+              {
+                vehicle_id: vehicle.id,
+                // Without this the line reads as a lot of parts off the car:
+                // it would not count as scrap, would not mark the car
+                // scrapped, and would not trip the sold-once guard.
+                is_shell: true,
+                unit_price: form.amount || '0',
+                quantity: 1,
+              },
+            ],
           })
         : api.post('/expenses', {
             vehicle_id: vehicle.id,

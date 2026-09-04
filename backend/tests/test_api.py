@@ -1288,3 +1288,112 @@ def test_meetup_time_survives_a_round_trip(client: TestClient, auth_headers, adm
         f"/api/sales/{sale['id']}", headers=auth_headers, json={"meetup_at": None}
     ).json()
     assert cleared["meetup_at"] is None
+
+
+def test_the_scrap_panel_payload_marks_a_shell_and_completes_it(
+    client: TestClient, auth_headers, admin
+) -> None:
+    """Guards the exact body the car page's "what the yard paid" panel sends."""
+    car = _car(client, auth_headers, nickname="The silver wagon")
+
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-03",
+            "paid_on": "2026-09-03",
+            "fulfilled_on": "2026-09-03",
+            "channel": "scrap",
+            "buyer_name": "Ace Metals",
+            "collected_by_id": admin.id,
+            "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
+        },
+    )
+    assert sale.status_code == 201, sale.text
+    assert sale.json()["state"] == "complete"
+
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["scrap_revenue"] == "180.00"
+    assert detail["status"] == "scrapped"
+
+    # And a second attempt is refused, which is what stops a double entry.
+    again = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-04",
+            "paid_on": "2026-09-04",
+            "fulfilled_on": "2026-09-04",
+            "collected_by_id": admin.id,
+            "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
+        },
+    )
+    assert again.status_code == 409
+    assert "already scrapped" in again.json()["detail"]
+
+
+def test_a_cars_ledger_lists_income_as_well_as_costs(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers, nickname="The silver wagon")
+    part = _part(client, auth_headers, "Alternator", vehicle_id=car["id"], status="available")
+
+    # Paid: counts towards profit.
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-01",
+            "paid_on": "2026-09-01",
+            "fulfilled_on": "2026-09-01",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    )
+    # Agreed only: shown, but not counted.
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-02",
+            "collected_by_id": admin.id,
+            "items": [
+                {"vehicle_id": car["id"], "description": "Interior lot", "unit_price": "250.00"}
+            ],
+        },
+    )
+
+    lines = client.get(f"/api/vehicles/{car['id']}/sales", headers=auth_headers).json()
+    assert len(lines) == 2
+    by_description = {line["description"]: line for line in lines}
+
+    assert by_description["Alternator"]["via"] == "parts"
+    assert by_description["Alternator"]["state"] == "complete"
+    assert by_description["Interior lot"]["via"] == "car"
+    assert by_description["Interior lot"]["state"] == "pending"
+
+    # Only the paid one reaches profit, but both are visible.
+    detail = client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()
+    assert detail["total_revenue"] == "85.00"
+
+
+def test_a_cars_ledger_lists_a_lot_once(client: TestClient, auth_headers, admin) -> None:
+    car = _car(client, auth_headers)
+    a = _part(client, auth_headers, "Seats", vehicle_id=car["id"], status="available")
+    b = _part(client, auth_headers, "Dash", vehicle_id=car["id"], status="available")
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-01",
+            "paid_on": "2026-09-01",
+            "fulfilled_on": "2026-09-01",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [a["id"], b["id"]], "unit_price": "400.00"}],
+        },
+    )
+
+    lines = client.get(f"/api/vehicles/{car['id']}/sales", headers=auth_headers).json()
+    # One line, not one per part.
+    assert len(lines) == 1
+    assert lines[0]["line_total"] == "400.00"

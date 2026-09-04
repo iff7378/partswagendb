@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.core.deps import CurrentUser, DbSession, RequireEditor
@@ -10,6 +11,7 @@ from app.schemas.vehicle import (
     VehicleCreate,
     VehicleDetail,
     VehicleRead,
+    VehicleSaleLine,
     VehicleUpdate,
     VinDecodeResult,
     normalise_vin,
@@ -282,3 +284,57 @@ def delete_vehicle(db: DbSession, _: RequireEditor, vehicle_id: int) -> Message:
     db.delete(vehicle)
     db.commit()
     return Message(detail=f"Deleted vehicle {vehicle.stock_number}")
+
+
+@router.get("/{vehicle_id}/sales", response_model=list[VehicleSaleLine])
+def vehicle_sales(db: DbSession, _: CurrentUser, vehicle_id: int) -> list[VehicleSaleLine]:
+    """Every line of income booked against this car, paid or not.
+
+    The car page previously showed only what had been spent, which made a car
+    look like a pure loss. Unpaid lines are included and labelled, because
+    "agreed but not paid" is worth seeing next to the costs even though it does
+    not count towards profit yet.
+    """
+    _get_or_404(db, vehicle_id)
+
+    # Ids first: a lot line joins once per part, so it has to be de-duplicated.
+    # Postgres refuses SELECT DISTINCT when the ORDER BY names a column outside
+    # the select list, so the ordering waits for the second query. (SQLite
+    # allows it, which is why the tests alone would not have caught this.)
+    attributed = (
+        select(SaleItem.id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .outerjoin(SaleItem.parts)
+        .where(
+            or_(
+                SaleItem.vehicle_id == vehicle_id,
+                and_(SaleItem.vehicle_id.is_(None), Part.vehicle_id == vehicle_id),
+            )
+        )
+        .distinct()
+    )
+
+    rows = db.execute(
+        select(SaleItem)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(SaleItem.id.in_(attributed))
+        .options(selectinload(SaleItem.sale), selectinload(SaleItem.parts))
+        .order_by(Sale.sold_on.desc(), SaleItem.id)
+    ).scalars()
+
+    return [
+        VehicleSaleLine(
+            sale_id=item.sale.id,
+            reference=item.sale.reference,
+            sold_on=item.sale.sold_on,
+            paid_on=item.sale.paid_on,
+            state=item.sale.state,
+            buyer_name=item.sale.buyer_name,
+            description=item.description,
+            is_shell=item.is_shell,
+            quantity=item.quantity,
+            line_total=item.line_total,
+            via="shell" if item.is_shell else ("car" if item.vehicle_id else "parts"),
+        )
+        for item in rows
+    ]

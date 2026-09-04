@@ -356,3 +356,18 @@ export interface Schedule {
   unscheduled: ScheduleEntry[]
   sites: SiteBrief[]
 }
+
+export interface VehicleSaleLine {
+  sale_id: number
+  reference: string
+  sold_on: string
+  paid_on: string | null
+  state: SaleState
+  buyer_name: string | null
+  description: string
+  is_shell: boolean
+  quantity: number
+  line_total: string
+  /** 'shell', 'car' (a lot named against it) or 'parts'. */
+  via: string
+}
