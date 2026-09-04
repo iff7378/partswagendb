@@ -81,6 +81,8 @@ class SaleState(StrEnum):
     PAID = "paid"
     GONE = "gone"
     COMPLETE = "complete"
+    # Cancelled but kept, so the record of it having existed survives.
+    VOIDED = "voided"
 
 
 class OcrStatus(StrEnum):

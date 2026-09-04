@@ -1497,3 +1497,112 @@ def test_is_sellable_reflects_being_on_a_sale(client: TestClient, auth_headers, 
         for p in client.get("/api/parts?sellable=true", headers=auth_headers).json()["items"]
     }
     assert pickable == {title for title, ok in listed.items() if ok}
+
+
+def test_voiding_keeps_the_record_and_says_who_did_it(
+    client: TestClient, auth_headers, admin
+) -> None:
+    made = _sale(client, auth_headers, admin, paid_on="2026-09-01", fulfilled_on="2026-09-01")
+    sale_id = made["sale"]["id"]
+
+    voided = client.delete(
+        f"/api/sales/{sale_id}?reason=Buyer+changed+their+mind", headers=auth_headers
+    )
+    assert voided.status_code == 200, voided.text
+    body = voided.json()
+    assert body["state"] == "voided"
+    assert body["void_reason"] == "Buyer changed their mind"
+    assert body["voided_by"]["id"] == admin.id
+    assert body["voided_at"] is not None
+
+    # Still fetchable by id: the record survives.
+    assert client.get(f"/api/sales/{sale_id}", headers=auth_headers).status_code == 200
+    # Out of the way by default, findable on request.
+    assert client.get("/api/sales", headers=auth_headers).json()["total"] == 0
+    assert client.get("/api/sales?include_voided=true", headers=auth_headers).json()["total"] == 1
+    assert client.get("/api/sales?state=voided", headers=auth_headers).json()["total"] == 1
+
+    # And it holds nothing: the part is back and sellable.
+    part = client.get(f"/api/parts/{made['part']['id']}", headers=auth_headers).json()
+    assert part["status"] == "available"
+    assert part["is_sellable"] is True
+
+
+def test_a_voided_sale_frees_its_part_for_another_sale(
+    client: TestClient, auth_headers, admin
+) -> None:
+    made = _sale(client, auth_headers, admin)
+    client.delete(f"/api/sales/{made['sale']['id']}", headers=auth_headers)
+
+    again = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-02",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [made["part"]["id"]], "unit_price": "90.00"}],
+        },
+    )
+    # The old sale must not still be claiming it.
+    assert again.status_code == 201, again.text
+
+
+def test_a_voided_shell_sale_lets_the_car_be_scrapped_again(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = _car(client, auth_headers)
+    body = {
+        "sold_on": "2026-09-01",
+        "paid_on": "2026-09-01",
+        "fulfilled_on": "2026-09-01",
+        "collected_by_id": admin.id,
+        "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
+    }
+    first = client.post("/api/sales", headers=auth_headers, json=body).json()
+    assert client.post("/api/sales", headers=auth_headers, json=body).status_code == 409
+
+    client.delete(f"/api/sales/{first['id']}", headers=auth_headers)
+    assert client.post("/api/sales", headers=auth_headers, json=body).status_code == 201
+
+
+def test_a_voided_sale_cannot_be_voided_or_edited_again(
+    client: TestClient, auth_headers, admin
+) -> None:
+    made = _sale(client, auth_headers, admin)
+    client.delete(f"/api/sales/{made['sale']['id']}", headers=auth_headers)
+
+    assert (
+        client.delete(f"/api/sales/{made['sale']['id']}", headers=auth_headers).status_code == 409
+    )
+    edited = client.patch(
+        f"/api/sales/{made['sale']['id']}", headers=auth_headers, json={"paid_on": "2026-09-05"}
+    )
+    assert edited.status_code == 409
+    assert "voided" in edited.json()["detail"]
+
+
+def test_a_voided_sale_is_off_the_schedule_and_the_books(
+    client: TestClient, auth_headers, admin
+) -> None:
+    made = _sale(client, auth_headers, admin, meetup_at="2026-09-05T17:00:00+01:00")
+    assert len(client.get("/api/sales/schedule", headers=auth_headers).json()["scheduled"]) == 1
+
+    client.patch(
+        f"/api/sales/{made['sale']['id']}", headers=auth_headers, json={"paid_on": "2026-09-01"}
+    )
+    report = client.get(
+        "/api/settle-up?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+    ).json()
+    assert report["total_revenue"] == "85.00"
+
+    client.delete(f"/api/sales/{made['sale']['id']}", headers=auth_headers)
+
+    assert client.get("/api/sales/schedule", headers=auth_headers).json()["scheduled"] == []
+    after = client.get(
+        "/api/settle-up?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+    ).json()
+    assert after["total_revenue"] == "0.00"
+    ledger = client.get(
+        "/api/reports/ledger?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+    ).json()
+    assert ledger["entries"] == []

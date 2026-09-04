@@ -190,27 +190,50 @@ export default function PartNew() {
         </div>
 
         <div className="card space-y-3 p-4">
-          <Field label="Photos" hint="Part numbers get read automatically after upload.">
+          <Field
+            label="Photos"
+            hint={
+              files.length > 0
+                ? `${files.length} to upload. Tap again to add more.`
+                : 'Take several, or pick a few from your library. Part numbers get read automatically.'
+            }
+          >
+            {/* No capture attribute: it forces the camera straight open, which
+                makes multiple inert -- you get exactly one shot per tap and
+                no way to pick from the library. Without it the OS offers
+                both, and several at once. */}
             <input
               ref={fileInput}
               type="file"
               accept="image/*"
-              capture="environment"
               multiple
               className="field"
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              onChange={(e) => {
+                // Append, never replace: taking a second photo used to throw
+                // the first one away.
+                const added = Array.from(e.target.files ?? [])
+                setFiles((prev) => [...prev, ...added])
+                // Clearing lets the same file be chosen again, and stops the
+                // input reporting stale names.
+                e.target.value = ''
+              }}
             />
           </Field>
 
           {previews.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {previews.map((src) => (
-                <img
-                  key={src}
-                  src={src}
-                  alt=""
-                  className="h-24 w-24 flex-none rounded-lg object-cover"
-                />
+              {previews.map((src, index) => (
+                <div key={src} className="relative flex-none">
+                  <img src={src} alt="" className="h-24 w-24 rounded-lg object-cover" />
+                  <button
+                    type="button"
+                    className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/60 text-xs font-bold text-white"
+                    aria-label={`Remove photo ${index + 1}`}
+                    onClick={() => setFiles((prev) => prev.filter((_, i) => i !== index))}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
           )}

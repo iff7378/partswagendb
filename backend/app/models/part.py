@@ -85,7 +85,8 @@ class Part(Base, TimestampMixin):
         """
         if self.status not in (PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED):
             return False
-        return not self.sale_items
+        # A voided sale holds nothing, so its parts are on offer again.
+        return not any(item.sale.voided_at is None for item in self.sale_items)
 
     @property
     def days_in_stock(self) -> int:

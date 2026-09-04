@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import History from '../components/History'
 import QrScanner from '../components/QrScannerLazy'
 import { ErrorNote, Field, PageHeader, Spinner, StatusChip } from '../components/ui'
 import { api, download } from '../lib/api'
@@ -117,6 +118,7 @@ export default function PartDetailPage() {
 
       {canEdit && <MovePart part={p} />}
 
+
       {editing ? (
         <EditForm part={p} onSave={(payload) => update.mutate(payload)} saving={update.isPending} />
       ) : (
@@ -165,14 +167,19 @@ export default function PartDetailPage() {
               </div>
             )}
 
+            {/* No capture attribute: it forces the camera open and makes
+                multiple inert, so several library shots could never be added
+                at once. */}
             {canEdit && (
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 multiple
                 className="field"
-                onChange={(e) => e.target.files && uploadPhoto.mutate(e.target.files)}
+                onChange={(e) => {
+                  if (e.target.files?.length) uploadPhoto.mutate(e.target.files)
+                  e.target.value = ''
+                }}
               />
             )}
 
@@ -281,6 +288,8 @@ export default function PartDetailPage() {
           </section>
         </div>
       )}
+
+      <History entity="Part" entityId={p.id} />
     </>
   )
 }

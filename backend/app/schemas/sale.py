@@ -88,6 +88,9 @@ class SaleRead(SaleBase, ORMModel):
     id: int
     reference: str
     state: SaleState
+    voided_at: datetime | None = None
+    void_reason: str | None = None
+    voided_by: UserBrief | None = None
     subtotal: Decimal
     net_collected: Decimal
     collected_by: UserBrief

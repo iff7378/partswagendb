@@ -53,7 +53,12 @@ def _revenue_by_user(db: Session, start: date, end: date) -> dict[int, Decimal]:
             ),
         )
         .outerjoin(item_totals, item_totals.c.sale_id == Sale.id)
-        .where(Sale.paid_on.is_not(None), Sale.paid_on >= start, Sale.paid_on <= end)
+        .where(
+            Sale.voided_at.is_(None),
+            Sale.paid_on.is_not(None),
+            Sale.paid_on >= start,
+            Sale.paid_on <= end,
+        )
         .group_by(Sale.collected_by_id)
     ).all()
     return {user_id: money(total) for user_id, total in rows}

@@ -4,7 +4,7 @@ export type PartStatus = 'draft' | 'available' | 'reserved' | 'sold' | 'scrapped
 export type PartCondition = 'new' | 'a' | 'b' | 'c' | 'core' | 'salvage' | 'unknown'
 export type VehicleStatus = 'acquired' | 'in_teardown' | 'stripped' | 'scrapped'
 export type LocationKind = 'site' | 'shelf' | 'bay' | 'bin'
-export type SaleState = 'pending' | 'paid' | 'gone' | 'complete'
+export type SaleState = 'pending' | 'paid' | 'gone' | 'complete' | 'voided'
 export type SaleChannel = 'ebay' | 'facebook' | 'local' | 'phone' | 'scrap' | 'other'
 export type ExpenseCategory =
   | 'purchase'
@@ -202,6 +202,9 @@ export interface Sale {
   fulfilled_on: string | null
   /** ISO instant the buyer said they would turn up, or null. */
   meetup_at: string | null
+  voided_at: string | null
+  void_reason: string | null
+  voided_by: UserBrief | null
   state: SaleState
   channel: SaleChannel
   buyer_name: string | null
@@ -400,4 +403,15 @@ export interface Ledger {
   money_out: string
   profit: string
   uncounted: string
+}
+
+export interface AuditEntry {
+  id: number
+  at: string
+  user_name: string | null
+  action: 'created' | 'updated' | 'deleted'
+  entity: string
+  entity_id: number | null
+  label: string | null
+  changes: Record<string, unknown> | null
 }

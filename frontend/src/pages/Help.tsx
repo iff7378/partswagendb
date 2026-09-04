@@ -448,6 +448,33 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'history',
+    title: 'Who changed what',
+    body: (
+      <>
+        <P>
+          Every sale, part, car, cost and settlement keeps a <strong>History</strong> panel
+          showing who created it, who changed it, and what each field said before. Open it at
+          the bottom of the record.
+        </P>
+        <P>
+          Both of you can read it. That is deliberate: two people splitting the takings should
+          be able to check each other&rsquo;s working without asking permission. Viewers cannot.
+        </P>
+        <P>
+          <strong>Voiding a sale no longer deletes it.</strong> It is kept, marked voided, and
+          hidden from the list unless you pick <em>Voided</em> under Showing. It counts towards
+          nothing, but the fact that it existed, who cancelled it and why all survive. A sale
+          that simply vanished left no way to answer &ldquo;was there a payment here?&rdquo;
+        </P>
+        <Note>
+          The history starts from the day this was added. Anything done before that has no
+          entries, which is why older records show an empty panel rather than a wrong one.
+        </Note>
+      </>
+    ),
+  },
+  {
     id: 'roles',
     title: 'Who can do what',
     body: (

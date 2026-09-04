@@ -1,17 +1,19 @@
 import csv
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from app.core.deps import CurrentUser, DbSession, RequireAdmin
+from app.core.deps import CurrentUser, DbSession, RequireAdmin, RequireEditor
 from app.db import days_since
 from app.enums import PartStatus, VehicleStatus
 from app.models import (
+    AuditEntry,
     Location,
     Part,
     PartCategory,
@@ -24,6 +26,7 @@ from app.models import (
     Vehicle,
     VehicleExpense,
 )
+from app.schemas.common import ORMModel, Page
 from app.services.ledger import ZERO, money
 
 router = APIRouter(tags=["reports"])
@@ -53,7 +56,7 @@ def dashboard(db: DbSession, _: CurrentUser) -> DashboardStats:
         select(func.sum(SaleItem.unit_price * SaleItem.quantity))
         .select_from(SaleItem)
         .join(Sale, Sale.id == SaleItem.sale_id)
-        .where(Sale.paid_on.is_not(None), Sale.paid_on >= cutoff)
+        .where(Sale.voided_at.is_(None), Sale.paid_on.is_not(None), Sale.paid_on >= cutoff)
     ).scalar_one_or_none()
 
     expenses = db.execute(
@@ -233,7 +236,11 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
     named = db.execute(
         select(SaleItem.vehicle_id, SaleItem.id, line_total)
         .join(Sale, Sale.id == SaleItem.sale_id)
-        .where(SaleItem.vehicle_id.is_not(None), Sale.paid_on.is_not(None))
+        .where(
+            SaleItem.vehicle_id.is_not(None),
+            Sale.paid_on.is_not(None),
+            Sale.voided_at.is_(None),
+        )
     ).all()
     via_parts = db.execute(
         select(Part.vehicle_id, SaleItem.id, line_total)
@@ -244,6 +251,7 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
             SaleItem.vehicle_id.is_(None),
             Part.vehicle_id.is_not(None),
             Sale.paid_on.is_not(None),
+            Sale.voided_at.is_(None),
         )
     ).all()
 
@@ -264,6 +272,7 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
                 SaleItem.vehicle_id.is_not(None),
                 SaleItem.is_shell.is_(True),
                 Sale.paid_on.is_not(None),
+                Sale.voided_at.is_(None),
             )
             .group_by(SaleItem.vehicle_id)
         ).all()
@@ -275,10 +284,12 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
         select(func.sum(line_total))
         .select_from(SaleItem)
         .join(Sale, Sale.id == SaleItem.sale_id)
-        .where(Sale.paid_on.is_not(None))
+        .where(Sale.paid_on.is_not(None), Sale.voided_at.is_(None))
     ).scalar_one_or_none()
     adjustments = db.execute(
-        select(func.sum(Sale.shipping + Sale.tax - Sale.fees)).where(Sale.paid_on.is_not(None))
+        select(func.sum(Sale.shipping + Sale.tax - Sale.fees)).where(
+            Sale.paid_on.is_not(None), Sale.voided_at.is_(None)
+        )
     ).scalar_one_or_none()
 
     rows: list[VehicleResult] = []
@@ -480,7 +491,11 @@ def ledger(
             selectinload(Sale.items).selectinload(SaleItem.vehicle),
             selectinload(Sale.items).selectinload(SaleItem.parts).selectinload(Part.vehicle),
         )
-        .where(Sale.sold_on >= period_start, Sale.sold_on <= period_end)
+        .where(
+            Sale.sold_on >= period_start,
+            Sale.sold_on <= period_end,
+            Sale.voided_at.is_(None),
+        )
     ).scalars()
 
     for sale in sales:
@@ -584,4 +599,49 @@ def ledger(
         money_out=money_out,
         profit=money(money_in - money_out),
         uncounted=money(sum((e.amount for e in entries if not e.counted), ZERO)),
+    )
+
+
+class AuditRead(ORMModel):
+    id: int
+    at: datetime
+    user_name: str | None = None
+    action: str
+    entity: str
+    entity_id: int | None = None
+    label: str | None = None
+    changes: dict[str, Any] | None = None
+
+
+@router.get("/audit", response_model=Page[AuditRead])
+def audit(
+    db: DbSession,
+    _: RequireEditor,
+    entity: str | None = None,
+    entity_id: int | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = 0,
+) -> Page[AuditRead]:
+    """Who changed what. Open to staff as well as admins, deliberately.
+
+    Two people splitting takings need to be able to check each other's working
+    without asking permission first; a history only one of them can read
+    answers the wrong question.
+    """
+    query = select(AuditEntry)
+    if entity:
+        query = query.where(AuditEntry.entity == entity)
+    if entity_id is not None:
+        query = query.where(AuditEntry.entity_id == entity_id)
+
+    total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
+    rows = db.execute(
+        query.order_by(AuditEntry.at.desc(), AuditEntry.id.desc()).limit(limit).offset(offset)
+    ).scalars()
+
+    return Page[AuditRead](
+        items=[AuditRead.model_validate(row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
     )

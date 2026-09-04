@@ -52,6 +52,14 @@ class Sale(Base, TimestampMixin):
     # over Messenger, so the handover time lives here rather than in someone's
     # phone. Stored with an offset so it survives a device in another zone.
     meetup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+    # Voiding keeps the row. A sale that vanishes leaves no way to answer "was
+    # there a payment here and who removed it", which for a two-party money
+    # split is the question most worth being able to answer.
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    voided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    voided_by: Mapped["User | None"] = relationship(foreign_keys=[voided_by_id])
+    void_reason: Mapped[str | None] = mapped_column(String(255))
     channel: Mapped[SaleChannel] = mapped_column(
         String(16), default=SaleChannel.LOCAL, nullable=False
     )
@@ -80,6 +88,8 @@ class Sale(Base, TimestampMixin):
 
     @property
     def state(self) -> SaleState:
+        if self.voided_at is not None:
+            return SaleState.VOIDED
         if self.paid_on and self.fulfilled_on:
             return SaleState.COMPLETE
         if self.paid_on:

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
 
+import History from '../components/History'
 import SaleLines from '../components/SaleLines'
 import SuggestInput from '../components/SuggestInput'
 import SalesTabs from '../components/SalesTabs'
@@ -29,6 +30,7 @@ const STATE_FILTERS: { value: string; label: string }[] = [
   { value: 'paid', label: 'Paid, awaiting collection' },
   { value: 'gone', label: 'Gone, still owed for' },
   { value: 'complete', label: 'Done' },
+  { value: 'voided', label: 'Voided' },
 ]
 
 function StateChip({ state }: { state: SaleState }) {
@@ -427,12 +429,11 @@ function SaleRow({
   })
 
   const voidSale = useMutation({
-    mutationFn: () => api.delete(`/sales/${sale.id}`),
+    mutationFn: (reason: string) =>
+      api.delete(`/sales/${sale.id}?reason=${encodeURIComponent(reason)}`),
     onSuccess: () => {
-      // Collapse first: leaving the row open would refetch a sale that no
-      // longer exists and surface a 404.
-      setOpen(false)
-      queryClient.removeQueries({ queryKey: ['sale', sale.id] })
+      // The sale survives now, so the row can stay open and show its new
+      // state; only the list membership changes.
       refresh()
     },
   })
@@ -444,7 +445,7 @@ function SaleRow({
         className="flex w-full flex-wrap items-center gap-3 text-left"
         onClick={() => setOpen(!open)}
       >
-        <div className="min-w-0 flex-1">
+        <div className={`min-w-0 flex-1 ${sale.voided_at ? 'opacity-60' : ''}`}>
           <p className="flex flex-wrap items-center gap-2 truncate text-sm font-medium">
             {sale.buyer_name || 'Walk-in buyer'}{' '}
             <span className="font-normal text-ink-soft">via {CHANNEL_LABELS[sale.channel]}</span>
@@ -458,7 +459,13 @@ function SaleRow({
           )}
         </div>
         <div className="text-right">
-          <p className="font-semibold tabular-nums">{money(sale.net_collected)}</p>
+          <p
+            className={`font-semibold tabular-nums ${
+              sale.voided_at ? 'text-ink-soft line-through' : ''
+            }`}
+          >
+            {money(sale.net_collected)}
+          </p>
           {Number(sale.fees) > 0 && (
             <p className="text-xs text-ink-soft">after {money(sale.fees)} fees</p>
           )}
@@ -522,7 +529,16 @@ function SaleRow({
                 </div>
               </dl>
 
-              {canEdit && (
+              {detail.data.voided_at && (
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-ink-soft">
+                  Voided by {detail.data.voided_by?.full_name ?? 'someone'} on{' '}
+                  {date(detail.data.voided_at)}
+                  {detail.data.void_reason && ` · ${detail.data.void_reason}`}. Kept so the
+                  record of it survives; it counts towards nothing.
+                </p>
+              )}
+
+              {canEdit && !detail.data.voided_at && (
                 <div className="flex flex-wrap gap-2">
                   {!detail.data.paid_on && (
                     <button
@@ -558,9 +574,12 @@ function SaleRow({
                     className="btn-danger ml-auto"
                     disabled={voidSale.isPending}
                     onClick={() => {
-                      if (confirm(voidWarning(detail.data!))) {
-                        voidSale.mutate()
-                      }
+                      const reason = prompt(
+                        `${voidWarning(detail.data!)}\n\nWhy is it being voided?`,
+                        '',
+                      )
+                      // Cancel returns null; an empty reason is still a yes.
+                      if (reason !== null) voidSale.mutate(reason)
                     }}
                   >
                     {voidSale.isPending ? 'Voiding…' : 'Void this sale'}
@@ -569,6 +588,8 @@ function SaleRow({
               )}
             </>
           )}
+
+          {detail.data && !editing && <History entity="Sale" entityId={sale.id} />}
 
           {detail.data && editing && (
             <EditSale

@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import History from '../components/History'
 import SuggestInput from '../components/SuggestInput'
 import { ErrorNote, Field, PageHeader, Spinner, Stat, StatusChip } from '../components/ui'
 import { api } from '../lib/api'
@@ -303,6 +304,9 @@ export default function VehicleDetailPage() {
           ))}
         </div>
       </div>
+
+      <History entity="Vehicle" entityId={v.id} />
+
     </>
   )
 }

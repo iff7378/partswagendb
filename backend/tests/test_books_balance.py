@@ -207,7 +207,7 @@ def test_paying_a_pending_sale_moves_every_figure_together(
     assert after[1] == after[2]
 
 
-def test_voiding_everything_returns_the_books_to_zero(
+def test_voiding_everything_returns_the_books_to_zero_but_keeps_the_record(
     client: TestClient, auth_headers, admin
 ) -> None:
     state = _lifecycle(client, auth_headers, admin)
@@ -217,6 +217,12 @@ def test_voiding_everything_returns_the_books_to_zero(
 
     ledger = client.get(f"/api/settle-up?{PERIOD}", headers=auth_headers).json()
     assert D(ledger["total_revenue"]) == D("0.00")
+
+    # Voided, not gone: the sales are still there to be looked up.
+    assert client.get("/api/sales?limit=200", headers=auth_headers).json()["total"] == 0
+    kept = client.get("/api/sales?limit=200&include_voided=true", headers=auth_headers).json()
+    assert kept["total"] == 5
+    assert {s["state"] for s in kept["items"]} == {"voided"}
 
     report = client.get("/api/reports/by-vehicle", headers=auth_headers).json()
     row = next(v for v in report["vehicles"] if v["id"] == state["car"]["id"])

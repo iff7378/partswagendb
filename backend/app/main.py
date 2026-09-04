@@ -10,6 +10,9 @@ from app.api.router import api_router
 from app.bootstrap import seed_categories, seed_first_admin
 from app.config import settings
 from app.db import SessionLocal
+
+# Imported for its side effect: registering the audit flush listener.
+from app.services import audit as _audit  # noqa: F401
 from app.services.storage import ensure_bucket
 
 logging.basicConfig(level=settings.log_level)

@@ -202,6 +202,7 @@ def get_vehicle(db: DbSession, _: CurrentUser, vehicle_id: int) -> VehicleDetail
         .where(
             # Only money that has actually landed, matching the ledger.
             Sale.paid_on.is_not(None),
+            Sale.voided_at.is_(None),
             or_(
                 SaleItem.vehicle_id == vehicle_id,
                 # A line naming a car has already been counted by that car, so
@@ -218,6 +219,7 @@ def get_vehicle(db: DbSession, _: CurrentUser, vehicle_id: int) -> VehicleDetail
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(
             Sale.paid_on.is_not(None),
+            Sale.voided_at.is_(None),
             SaleItem.vehicle_id == vehicle_id,
             SaleItem.is_shell.is_(True),
         )
@@ -306,10 +308,11 @@ def vehicle_sales(db: DbSession, _: CurrentUser, vehicle_id: int) -> list[Vehicl
         .join(Sale, Sale.id == SaleItem.sale_id)
         .outerjoin(SaleItem.parts)
         .where(
+            Sale.voided_at.is_(None),
             or_(
                 SaleItem.vehicle_id == vehicle_id,
                 and_(SaleItem.vehicle_id.is_(None), Part.vehicle_id == vehicle_id),
-            )
+            ),
         )
         .distinct()
     )

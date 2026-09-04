@@ -4,11 +4,11 @@ import { useState } from 'react'
 import GeneralExpenses from '../components/GeneralExpenses'
 import MoneyTabs from '../components/MoneyTabs'
 import VehicleResults from '../components/VehicleResults'
-import { ErrorNote, PageHeader, Spinner, Stat } from '../components/ui'
+import { ErrorNote, Field, PageHeader, Spinner, Stat } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { date, money, signedMoney } from '../lib/format'
-import type { SettleUpReport, Settlement, Transfer } from '../lib/types'
+import type { SettleUpReport, Settlement, Transfer, User } from '../lib/types'
 
 /** Calendar quarter containing `today`, which is how the partners reconcile. */
 function currentQuarter(today = new Date()): { start: string; end: string } {
@@ -25,6 +25,7 @@ export default function Money() {
   const quarter = currentQuarter()
   const [start, setStart] = useState(quarter.start)
   const [end, setEnd] = useState(quarter.end)
+  const [paying, setPaying] = useState(false)
 
   const report = useQuery({
     queryKey: ['settle-up', start, end],
@@ -180,9 +181,28 @@ export default function Money() {
         </>
       )}
 
-      <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-ink-soft">
-        Already settled
-      </h2>
+      <div className="mb-3 mt-8 flex flex-wrap items-end justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+          Already settled
+        </h2>
+        {canEdit && (
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setPaying((open) => !open)}
+          >
+            {paying ? 'Cancel' : 'Record a payment'}
+          </button>
+        )}
+      </div>
+
+      {paying && (
+        <RecordPayment
+          periodStart={start}
+          periodEnd={end}
+          onDone={() => setPaying(false)}
+        />
+      )}
 
       {settlements.data?.length === 0 ? (
         <p className="card px-4 py-8 text-center text-sm text-ink-soft">
@@ -304,5 +324,159 @@ function SettlementRow({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * A payment between partners for whatever amount actually changed hands.
+ *
+ * The one-click button above settles the exact figure the report worked out,
+ * which is right when someone clears the whole balance. Part payments and
+ * round numbers are just as common -- "here's 200 towards it" -- and without
+ * this the only way to record one was to not record it.
+ */
+function RecordPayment({
+  periodStart,
+  periodEnd,
+  onDone,
+}: {
+  periodStart: string
+  periodEnd: string
+  onDone: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [form, setForm] = useState({
+    from_user_id: '',
+    to_user_id: '',
+    amount: '',
+    paid_on: new Date().toISOString().slice(0, 10),
+    method: '',
+    notes: '',
+  })
+
+  const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<User[]>('/users') })
+  const partners = users.data?.filter((u) => u.is_partner) ?? []
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post('/settlements', {
+        period_start: periodStart,
+        period_end: periodEnd,
+        paid_on: form.paid_on,
+        from_user_id: Number(form.from_user_id),
+        to_user_id: Number(form.to_user_id),
+        amount: form.amount,
+        method: form.method.trim() || null,
+        notes: form.notes.trim() || null,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settle-up'] })
+      void queryClient.invalidateQueries({ queryKey: ['settlements'] })
+      onDone()
+    },
+  })
+
+  const sameParty = form.from_user_id !== '' && form.from_user_id === form.to_user_id
+
+  return (
+    <form
+      className="card mb-4 space-y-3 p-4"
+      onSubmit={(e) => {
+        e.preventDefault()
+        create.mutate()
+      }}
+    >
+      <ErrorNote error={create.error} />
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Who paid">
+          <select
+            className="field"
+            value={form.from_user_id}
+            onChange={(e) => setForm((p) => ({ ...p, from_user_id: e.target.value }))}
+            required
+          >
+            <option value="">Pick someone</option>
+            {partners.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Who received it">
+          <select
+            className="field"
+            value={form.to_user_id}
+            onChange={(e) => setForm((p) => ({ ...p, to_user_id: e.target.value }))}
+            required
+          >
+            <option value="">Pick someone</option>
+            {partners.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="How much" hint="Any amount, not just the figure worked out above.">
+          <input
+            className="field"
+            inputMode="decimal"
+            value={form.amount}
+            onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+            placeholder="200.00"
+            required
+          />
+        </Field>
+
+        <Field label="When">
+          <input
+            type="date"
+            className="field"
+            value={form.paid_on}
+            onChange={(e) => setForm((p) => ({ ...p, paid_on: e.target.value }))}
+          />
+        </Field>
+
+        <Field label="How" hint="Cash, Venmo, bank transfer…">
+          <input
+            className="field"
+            value={form.method}
+            onChange={(e) => setForm((p) => ({ ...p, method: e.target.value }))}
+          />
+        </Field>
+
+        <Field label="Note">
+          <input
+            className="field"
+            value={form.notes}
+            onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+            placeholder="Part payment towards Q3"
+          />
+        </Field>
+      </div>
+
+      {sameParty && (
+        <p className="text-sm text-rose-700">
+          Paying yourself would not move anything. Pick two different people.
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <button type="button" className="btn-secondary flex-1" onClick={onDone}>
+          Cancel
+        </button>
+        <button
+          type="submit"
+          className="btn-primary flex-1"
+          disabled={create.isPending || sameParty}
+        >
+          {create.isPending ? 'Saving…' : 'Record it'}
+        </button>
+      </div>
+    </form>
   )
 }

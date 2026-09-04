@@ -1,3 +1,4 @@
+from app.models.audit import AuditEntry
 from app.models.catalog import PartCategory, Tag, part_tags
 from app.models.location import Location
 from app.models.part import Part
@@ -8,6 +9,7 @@ from app.models.user import User
 from app.models.vehicle import Vehicle, VehicleExpense
 
 __all__ = [
+    "AuditEntry",
     "Location",
     "Part",
     "PartCategory",

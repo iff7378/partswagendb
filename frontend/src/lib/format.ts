@@ -133,6 +133,7 @@ export const SALE_STATE_LABELS: Record<SaleState, string> = {
   paid: 'Paid, not collected',
   gone: 'Gone, not paid',
   complete: 'Done',
+  voided: 'Voided',
 }
 
 export const SALE_STATE_HINTS: Record<SaleState, string> = {
@@ -140,6 +141,7 @@ export const SALE_STATE_HINTS: Record<SaleState, string> = {
   paid: 'Money is in. The parts are still here waiting to be collected.',
   gone: 'The parts have left but the money has not landed yet.',
   complete: 'Paid for and gone.',
+  voided: 'Cancelled. Kept for the record, but counts towards nothing.',
 }
 
 export const SALE_STATE_STYLES: Record<SaleState, string> = {
@@ -147,6 +149,7 @@ export const SALE_STATE_STYLES: Record<SaleState, string> = {
   paid: 'bg-sky-100 text-sky-800 ring-sky-200',
   gone: 'bg-amber-100 text-amber-900 ring-amber-200',
   complete: 'bg-emerald-100 text-emerald-800 ring-emerald-200',
+  voided: 'bg-slate-100 text-slate-500 ring-slate-200',
 }
 
 /** "Sat, Sep 5 at 5:00 PM" — an instant, rendered in the reader's own zone. */

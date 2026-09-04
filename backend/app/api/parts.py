@@ -8,7 +8,7 @@ from sqlalchemy.sql.elements import UnaryExpression
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.db import days_since
 from app.enums import PartCondition, PartStatus
-from app.models import Location, Part, PartCategory, Tag, Vehicle
+from app.models import Location, Part, PartCategory, Sale, SaleItem, Tag, Vehicle
 from app.schemas.common import Message, Page
 from app.schemas.part import PartCreate, PartDetail, PartMove, PartRead, PartUpdate
 from app.services.identifiers import next_part_sku
@@ -138,7 +138,7 @@ def list_parts(
         # it is spoken for, and offering it would only earn a 409 on save.
         query = query.where(
             Part.status.in_([PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED]),
-            ~Part.sale_items.any(),
+            ~Part.sale_items.any(SaleItem.sale.has(Sale.voided_at.is_(None))),
         )
     if condition:
         query = query.where(Part.condition == condition)

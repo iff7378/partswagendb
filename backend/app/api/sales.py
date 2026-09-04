@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -5,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.enums import PartStatus, SaleState, VehicleStatus
 from app.models import Location, Part, Sale, SaleItem, User, Vehicle
-from app.schemas.common import Message, Page
+from app.schemas.common import Page
 from app.schemas.sale import (
     SaleCreate,
     SaleDetail,
@@ -24,6 +26,7 @@ _LOADERS = (
     selectinload(Sale.items).selectinload(SaleItem.parts),
     selectinload(Sale.items).selectinload(SaleItem.vehicle),
     selectinload(Sale.collected_by),
+    selectinload(Sale.voided_by),
 )
 
 # Where a part goes back to when it comes off a sale. Draft is deliberately not
@@ -35,7 +38,13 @@ _STATE_FILTERS = {
     SaleState.PAID: (Sale.paid_on.is_not(None), Sale.fulfilled_on.is_(None)),
     SaleState.GONE: (Sale.paid_on.is_(None), Sale.fulfilled_on.is_not(None)),
     SaleState.COMPLETE: (Sale.paid_on.is_not(None), Sale.fulfilled_on.is_not(None)),
+    SaleState.VOIDED: (Sale.voided_at.is_not(None),),
 }
+
+# A voided sale holds nothing and owes nothing. Every query that asks what was
+# sold, earned or spoken for has to say so, which is a lot of call sites -- so
+# it is one named condition rather than a repeated is_(None).
+LIVE = Sale.voided_at.is_(None)
 
 
 def _get_or_404(db: Session, sale_id: int) -> Sale:
@@ -85,7 +94,7 @@ def _build_line(db: Session, line: SaleItemCreate, sale_id: int | None) -> SaleI
             select(Sale.reference)
             .join(SaleItem, SaleItem.sale_id == Sale.id)
             .join(SaleItem.parts)
-            .where(Part.id == part.id, Sale.id != sale_id)
+            .where(Part.id == part.id, Sale.id != sale_id, LIVE)
             .limit(1)
         ).scalar_one_or_none()
         if clash is not None:
@@ -115,6 +124,7 @@ def _build_line(db: Session, line: SaleItemCreate, sale_id: int | None) -> SaleI
                 SaleItem.vehicle_id == vehicle.id,
                 SaleItem.is_shell.is_(True),
                 Sale.id != sale_id,
+                LIVE,
             )
             .limit(1)
         ).scalar_one_or_none()
@@ -193,10 +203,14 @@ def list_sales(
     _: CurrentUser,
     collected_by_id: int | None = None,
     state: SaleState | None = None,
+    include_voided: bool = Query(default=False, description="Include sales that have been voided"),
     limit: int = Query(default=50, le=200),
     offset: int = 0,
 ) -> Page[SaleRead]:
     query = select(Sale).options(*_LOADERS)
+    # Voided sales are kept but out of the way: they are history, not stock.
+    if not include_voided and state != SaleState.VOIDED:
+        query = query.where(LIVE)
     if collected_by_id is not None:
         query = query.where(Sale.collected_by_id == collected_by_id)
     if state is not None:
@@ -252,7 +266,7 @@ def schedule(db: DbSession, _: CurrentUser, site_id: int | None = None) -> Sched
                 *_LOADERS,
                 selectinload(Sale.items).selectinload(SaleItem.parts).selectinload(Part.location),
             )
-            .where(Sale.fulfilled_on.is_(None))
+            .where(Sale.fulfilled_on.is_(None), LIVE)
             .order_by(Sale.meetup_at.asc().nullslast(), Sale.id.desc())
         ).scalars()
     )
@@ -280,6 +294,11 @@ def get_sale(db: DbSession, _: CurrentUser, sale_id: int) -> SaleDetail:
 @router.patch("/{sale_id}", response_model=SaleDetail)
 def update_sale(db: DbSession, _: RequireEditor, sale_id: int, payload: SaleUpdate) -> SaleDetail:
     sale = _get_or_404(db, sale_id)
+    if sale.voided_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{sale.reference} is voided. Record a new sale instead.",
+        )
     updates = payload.model_dump(exclude_unset=True)
     items = updates.pop("items", None)
 
@@ -312,16 +331,32 @@ def update_sale(db: DbSession, _: RequireEditor, sale_id: int, payload: SaleUpda
     return _to_detail(_get_or_404(db, sale_id))
 
 
-@router.delete("/{sale_id}", response_model=Message)
-def delete_sale(db: DbSession, _: RequireEditor, sale_id: int) -> Message:
-    """Void a sale and return its parts to available stock."""
-    sale = _get_or_404(db, sale_id)
-    _release(sale)
+@router.delete("/{sale_id}", response_model=SaleDetail)
+def void_sale(
+    db: DbSession,
+    user: RequireEditor,
+    sale_id: int,
+    reason: str | None = Query(default=None, max_length=255),
+) -> SaleDetail:
+    """Void a sale, returning its stock but keeping the record.
 
-    reference = sale.reference
-    db.delete(sale)
+    Deleting it outright used to leave no trace that money had ever been
+    recorded here, or who removed it. For two people splitting the takings that
+    is the one thing worth always being able to look up.
+    """
+    sale = _get_or_404(db, sale_id)
+    if sale.voided_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{sale.reference} is already voided",
+        )
+
+    _release(sale)
+    sale.voided_at = datetime.now(UTC)
+    sale.voided_by_id = user.id
+    sale.void_reason = reason
     db.commit()
-    return Message(detail=f"Voided sale {reference}")
+    return _to_detail(_get_or_404(db, sale_id))
 
 
 def _site_of(location: Location | None, by_id: dict[int, Location]) -> Location | None:
