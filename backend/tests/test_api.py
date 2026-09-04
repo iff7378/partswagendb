@@ -1397,3 +1397,70 @@ def test_a_cars_ledger_lists_a_lot_once(client: TestClient, auth_headers, admin)
     # One line, not one per part.
     assert len(lines) == 1
     assert lines[0]["line_total"] == "400.00"
+
+
+def test_voiding_a_lot_sale_leaves_the_car_scrapped(
+    client: TestClient, auth_headers, admin
+) -> None:
+    """A lot booked against a car is not what scrapped it, so voiding it must
+    not un-scrap the car. Only a shell line does that."""
+    car = _car(client, auth_headers)
+
+    shell = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-01",
+            "paid_on": "2026-09-01",
+            "fulfilled_on": "2026-09-01",
+            "collected_by_id": admin.id,
+            "items": [{"vehicle_id": car["id"], "is_shell": True, "unit_price": "180.00"}],
+        },
+    ).json()
+    lot = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-02",
+            "collected_by_id": admin.id,
+            "items": [
+                {"vehicle_id": car["id"], "description": "Interior lot", "unit_price": "250.00"}
+            ],
+        },
+    ).json()
+
+    def car_status() -> str:
+        return client.get(f"/api/vehicles/{car['id']}", headers=auth_headers).json()["status"]
+
+    assert car_status() == "scrapped"
+
+    client.delete(f"/api/sales/{lot['id']}", headers=auth_headers)
+    # Still scrapped: the shell sale is what put it there and still stands.
+    assert car_status() == "scrapped"
+
+    client.delete(f"/api/sales/{shell['id']}", headers=auth_headers)
+    assert car_status() == "stripped"
+
+
+def test_voiding_an_unpaid_sale_does_not_move_the_ledger(
+    client: TestClient, auth_headers, admin
+) -> None:
+    part = _part(client, auth_headers, "Alternator", status="available")
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-01",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    ).json()
+
+    def revenue() -> str:
+        return client.get(
+            "/api/settle-up?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
+        ).json()["total_revenue"]
+
+    assert revenue() == "0.00"
+    client.delete(f"/api/sales/{sale['id']}", headers=auth_headers)
+    assert revenue() == "0.00"

@@ -5,7 +5,7 @@ import type { FormEvent } from 'react'
 
 import SaleLines from '../components/SaleLines'
 import SalesTabs from '../components/SalesTabs'
-import { EMPTY_LINE, subtotalOf, toPayload } from '../lib/saleLines'
+import { EMPTY_LINE, subtotalOf, toPayload, voidWarning } from '../lib/saleLines'
 import type { Line } from '../lib/saleLines'
 import { EmptyState, ErrorNote, Field, PageHeader, Spinner } from '../components/ui'
 import { api } from '../lib/api'
@@ -524,12 +524,7 @@ function SaleRow({
                     className="btn-danger ml-auto"
                     disabled={voidSale.isPending}
                     onClick={() => {
-                      if (
-                        confirm(
-                          `Void ${sale.reference}? Its parts go back into stock, any car ` +
-                            `on it goes back to stripped, and the settle-up report changes.`,
-                        )
-                      ) {
+                      if (confirm(voidWarning(detail.data!))) {
                         voidSale.mutate()
                       }
                     }}

@@ -1,3 +1,5 @@
+import type { SaleDetail } from './types'
+
 /**
  * A line is whatever went for one price.
  *
@@ -50,4 +52,30 @@ export function subtotalOf(lines: Line[]): number {
     (sum, line) => sum + (Number(line.unit_price) || 0) * (Number(line.quantity) || 1),
     0,
   )
+}
+
+/** What voiding this particular sale will actually change. */
+export function voidWarning(sale: SaleDetail): string {
+  const effects: string[] = []
+
+  const parts = sale.items.reduce((n, item) => n + item.parts.length, 0)
+  if (parts > 0) {
+    effects.push(`${parts} ${parts === 1 ? 'part goes' : 'parts go'} back into stock`)
+  }
+
+  // Only a shell line scrapped a car, so only a shell line un-scraps one.
+  const shell = sale.items.find((item) => item.is_shell && item.vehicle_name)
+  if (shell) {
+    effects.push(`${shell.vehicle_name} goes back to stripped`)
+  }
+
+  effects.push(
+    sale.paid_on
+      ? 'the settle-up report changes'
+      : 'the settle-up report is unaffected, as it was never paid',
+  )
+
+  const last = effects.pop()
+  const list = effects.length > 0 ? `${effects.join(', ')} and ${last}` : last
+  return `Void ${sale.reference}? ${list![0].toUpperCase()}${list!.slice(1)}.`
 }
