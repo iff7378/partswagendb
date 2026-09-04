@@ -47,6 +47,8 @@ class SaleBase(BaseModel):
     # the stock off the shelf.
     paid_on: date | None = None
     fulfilled_on: date | None = None
+    # When the buyer is coming. Arranged over Messenger, kept here.
+    meetup_at: datetime | None = None
     channel: SaleChannel = SaleChannel.LOCAL
     buyer_name: str | None = None
     buyer_contact: str | None = None
@@ -67,6 +69,7 @@ class SaleUpdate(BaseModel):
     # Explicit null clears these, which is how a mis-marked sale is undone.
     paid_on: date | None = None
     fulfilled_on: date | None = None
+    meetup_at: datetime | None = None
     channel: SaleChannel | None = None
     buyer_name: str | None = None
     buyer_contact: str | None = None
@@ -93,3 +96,35 @@ class SaleRead(SaleBase, ORMModel):
 
 class SaleDetail(SaleRead):
     items: list[SaleItemRead] = Field(default_factory=list)
+
+
+class SiteBrief(BaseModel):
+    id: int
+    name: str
+
+
+class ScheduleEntry(BaseModel):
+    """One handover to be at, flattened for a diary view."""
+
+    id: int
+    reference: str
+    state: SaleState
+    meetup_at: datetime | None = None
+    buyer_name: str | None = None
+    buyer_contact: str | None = None
+    channel: SaleChannel
+    net_collected: Decimal
+    paid_on: date | None = None
+    summary: str
+    part_count: int = 0
+    # Where the parts are kept, so you know which site to be at. Derived from
+    # the parts rather than typed in, and null when nothing on the sale is
+    # shelved anywhere.
+    site: SiteBrief | None = None
+
+
+class Schedule(BaseModel):
+    scheduled: list[ScheduleEntry]
+    # Agreed but with no time set: the ones still to be pinned down.
+    unscheduled: list[ScheduleEntry]
+    sites: list[SiteBrief]

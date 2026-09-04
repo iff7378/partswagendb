@@ -1,8 +1,19 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, Numeric, String, Table, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Table,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -36,6 +47,11 @@ class Sale(Base, TimestampMixin):
     sold_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     paid_on: Mapped[date | None] = mapped_column(Date, index=True)
     fulfilled_on: Mapped[date | None] = mapped_column(Date, index=True)
+
+    # When the buyer said they would turn up. Most of this trade is arranged
+    # over Messenger, so the handover time lives here rather than in someone's
+    # phone. Stored with an offset so it survives a device in another zone.
+    meetup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     channel: Mapped[SaleChannel] = mapped_column(
         String(16), default=SaleChannel.LOCAL, nullable=False
     )

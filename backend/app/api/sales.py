@@ -4,9 +4,18 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.enums import PartStatus, SaleState, VehicleStatus
-from app.models import Part, Sale, SaleItem, User, Vehicle
+from app.models import Location, Part, Sale, SaleItem, User, Vehicle
 from app.schemas.common import Message, Page
-from app.schemas.sale import SaleCreate, SaleDetail, SaleItemCreate, SaleRead, SaleUpdate
+from app.schemas.sale import (
+    SaleCreate,
+    SaleDetail,
+    SaleItemCreate,
+    SaleRead,
+    SaleUpdate,
+    Schedule,
+    ScheduleEntry,
+    SiteBrief,
+)
 from app.services.identifiers import next_sale_reference
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -226,6 +235,43 @@ def create_sale(db: DbSession, user: RequireEditor, payload: SaleCreate) -> Sale
     return _to_detail(_get_or_404(db, sale.id))
 
 
+@router.get("/schedule", response_model=Schedule)
+def schedule(db: DbSession, _: CurrentUser, site_id: int | None = None) -> Schedule:
+    """Everything still to be handed over, as a diary rather than a ledger.
+
+    Only unfulfilled sales appear: once the buyer has been and gone there is
+    nothing left to turn up for.
+    """
+    locations = list(db.execute(select(Location)).scalars())
+    by_id = {location.id: location for location in locations}
+
+    sales = list(
+        db.execute(
+            select(Sale)
+            .options(
+                *_LOADERS,
+                selectinload(Sale.items).selectinload(SaleItem.parts).selectinload(Part.location),
+            )
+            .where(Sale.fulfilled_on.is_(None))
+            .order_by(Sale.meetup_at.asc().nullslast(), Sale.id.desc())
+        ).scalars()
+    )
+
+    entries = [_entry(sale, by_id) for sale in sales]
+    if site_id is not None:
+        entries = [e for e in entries if e.site and e.site.id == site_id]
+
+    return Schedule(
+        scheduled=[e for e in entries if e.meetup_at is not None],
+        unscheduled=[e for e in entries if e.meetup_at is None],
+        sites=[
+            SiteBrief(id=location.id, name=location.name)
+            for location in sorted(locations, key=lambda location: location.name)
+            if location.parent_id is None
+        ],
+    )
+
+
 @router.get("/{sale_id}", response_model=SaleDetail)
 def get_sale(db: DbSession, _: CurrentUser, sale_id: int) -> SaleDetail:
     return _to_detail(_get_or_404(db, sale_id))
@@ -276,3 +322,41 @@ def delete_sale(db: DbSession, _: RequireEditor, sale_id: int) -> Message:
     db.delete(sale)
     db.commit()
     return Message(detail=f"Voided sale {reference}")
+
+
+def _site_of(location: Location | None, by_id: dict[int, Location]) -> Location | None:
+    """Walk up to the top of the storage tree.
+
+    The schedule groups by site because that is the address you drive to; a
+    bay number does not help you decide where to be at five o'clock.
+    """
+    current = location
+    seen: set[int] = set()
+    while current is not None and current.parent_id is not None:
+        if current.id in seen:  # defensive: a cycle would hang the request
+            break
+        seen.add(current.id)
+        current = by_id.get(current.parent_id)
+    return current
+
+
+def _entry(sale: Sale, by_id: dict[int, Location]) -> ScheduleEntry:
+    parts = [part for item in sale.items for part in item.parts]
+    site = next(
+        (s for s in (_site_of(p.location, by_id) for p in parts) if s is not None),
+        None,
+    )
+    return ScheduleEntry(
+        id=sale.id,
+        reference=sale.reference,
+        state=sale.state,
+        meetup_at=sale.meetup_at,
+        buyer_name=sale.buyer_name,
+        buyer_contact=sale.buyer_contact,
+        channel=sale.channel,
+        net_collected=sale.net_collected,
+        paid_on=sale.paid_on,
+        summary=", ".join(item.description for item in sale.items),
+        part_count=len(parts),
+        site=SiteBrief(id=site.id, name=site.name) if site else None,
+    )

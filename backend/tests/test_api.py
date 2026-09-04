@@ -1153,3 +1153,138 @@ def test_unpaid_sales_stay_out_of_a_cars_return(client: TestClient, auth_headers
     report = client.get("/api/reports/by-vehicle", headers=auth_headers).json()
     row = next(v for v in report["vehicles"] if v["id"] == car["id"])
     assert row["total_revenue"] == "85.00"
+
+
+def test_schedule_route_is_not_swallowed_by_the_sale_id_route(
+    client: TestClient, auth_headers
+) -> None:
+    # /sales/{id} is declared after /sales/schedule for a reason.
+    response = client.get("/api/sales/schedule", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["scheduled"] == []
+
+
+def test_schedule_groups_a_pickup_under_the_site_its_parts_live_on(
+    client: TestClient, auth_headers, admin
+) -> None:
+    site = client.post(
+        "/api/locations", headers=auth_headers, json={"name": "Shed A", "kind": "site"}
+    ).json()
+    shelf = client.post(
+        "/api/locations",
+        headers=auth_headers,
+        json={"name": "Rack 3", "kind": "shelf", "parent_id": site["id"]},
+    ).json()
+    part = _part(client, auth_headers, "Alternator", status="available", location_id=shelf["id"])
+
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-03",
+            "meetup_at": "2026-09-05T17:00:00+01:00",
+            "buyer_name": "Marketplace Mike",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    )
+    assert sale.status_code == 201, sale.text
+
+    schedule = client.get("/api/sales/schedule", headers=auth_headers).json()
+    assert len(schedule["scheduled"]) == 1
+    entry = schedule["scheduled"][0]
+    assert entry["buyer_name"] == "Marketplace Mike"
+    # Grouped by the site, not the bay: it is an address, not a shelf.
+    assert entry["site"] == {"id": site["id"], "name": "Shed A"}
+    assert entry["summary"] == "Alternator"
+    assert entry["part_count"] == 1
+    assert schedule["sites"] == [{"id": site["id"], "name": "Shed A"}]
+
+    # Filtering by another site excludes it.
+    other = client.post(
+        "/api/locations", headers=auth_headers, json={"name": "Barn", "kind": "site"}
+    ).json()
+    filtered = client.get(f"/api/sales/schedule?site_id={other['id']}", headers=auth_headers).json()
+    assert filtered["scheduled"] == []
+
+
+def test_schedule_separates_the_sales_with_no_time_set(
+    client: TestClient, auth_headers, admin
+) -> None:
+    a = _part(client, auth_headers, "Alternator", status="available")
+    b = _part(client, auth_headers, "Starter", status="available")
+
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-03",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [a["id"]], "unit_price": "85.00"}],
+        },
+    )
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-03",
+            "meetup_at": "2026-09-05T17:00:00+01:00",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [b["id"]], "unit_price": "40.00"}],
+        },
+    )
+
+    schedule = client.get("/api/sales/schedule", headers=auth_headers).json()
+    assert len(schedule["scheduled"]) == 1
+    assert len(schedule["unscheduled"]) == 1
+
+
+def test_a_collected_sale_leaves_the_schedule(client: TestClient, auth_headers, admin) -> None:
+    part = _part(client, auth_headers, "Alternator", status="available")
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-03",
+            "meetup_at": "2026-09-05T17:00:00+01:00",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    ).json()
+    assert len(client.get("/api/sales/schedule", headers=auth_headers).json()["scheduled"]) == 1
+
+    client.patch(
+        f"/api/sales/{sale['id']}", headers=auth_headers, json={"fulfilled_on": "2026-09-05"}
+    )
+    # Been and gone: nothing left to turn up for.
+    assert client.get("/api/sales/schedule", headers=auth_headers).json()["scheduled"] == []
+
+
+def test_meetup_time_survives_a_round_trip(client: TestClient, auth_headers, admin) -> None:
+    part = _part(client, auth_headers, "Alternator", status="available")
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-03",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    ).json()
+    assert sale["meetup_at"] is None
+
+    updated = client.patch(
+        f"/api/sales/{sale['id']}",
+        headers=auth_headers,
+        json={"meetup_at": "2026-09-05T17:00:00+01:00"},
+    ).json()
+    # Only the wall clock is asserted here: these tests run on SQLite, which
+    # has no timezone-aware column type and drops the offset. Postgres stores
+    # the instant properly, which is what production runs on.
+    assert updated["meetup_at"].startswith("2026-09-05T17:00")
+
+    # Clearing it takes the sale off the schedule's diary.
+    cleared = client.patch(
+        f"/api/sales/{sale['id']}", headers=auth_headers, json={"meetup_at": None}
+    ).json()
+    assert cleared["meetup_at"] is None
