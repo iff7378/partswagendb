@@ -43,7 +43,29 @@ jobs:
 
       - name: Audit npm dependencies
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: |
+          # npm's audit endpoint returns 503 often enough to block deploys on
+          # its uptime rather than on anything about this code. Retry, and tell
+          # the two failures apart: a real finding fails the job, a registry
+          # outage warns and moves on. Failing on an outage is how a security
+          # job gets trained into background noise.
+          for attempt in 1 2 3; do
+            if output=$(npm audit --audit-level=high 2>&1); then
+              echo "$output"
+              exit 0
+            fi
+            echo "$output"
+            if echo "$output" | grep -qE "audit endpoint returned an error|ENOTFOUND|ETIMEDOUT|503"; then
+              echo "::warning::npm audit registry error on attempt ${attempt}, retrying"
+              sleep $((attempt * 15))
+              continue
+            fi
+            echo "::error::npm audit found vulnerabilities rated high or above"
+            exit 1
+          done
+          # CodeQL, Trivy and Dependabot all still ran; this one check being
+          # unreachable is worth a warning, not a red build.
+          echo "::warning::npm audit endpoint unreachable after 3 attempts"
 
   images:
     name: Image scan

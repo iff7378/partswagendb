@@ -1464,3 +1464,36 @@ def test_voiding_an_unpaid_sale_does_not_move_the_ledger(
     assert revenue() == "0.00"
     client.delete(f"/api/sales/{sale['id']}", headers=auth_headers)
     assert revenue() == "0.00"
+
+
+def test_is_sellable_reflects_being_on_a_sale(client: TestClient, auth_headers, admin) -> None:
+    """The parts page and the sale picker must agree on what can be sold."""
+    _part(client, auth_headers, "Free", status="available")
+    spoken_for = _part(client, auth_headers, "Spoken for", status="available")
+    _part(client, auth_headers, "Scrapped", status="scrapped")
+
+    client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-03",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [spoken_for["id"]], "unit_price": "85.00"}],
+        },
+    )
+
+    listed = {
+        p["title"]: p["is_sellable"]
+        for p in client.get("/api/parts?limit=50", headers=auth_headers).json()["items"]
+    }
+    assert listed["Free"] is True
+    # Reserved against a pending sale: still on the shelf, but not on offer.
+    assert listed["Spoken for"] is False
+    assert listed["Scrapped"] is False
+
+    # And the flag matches what the picker's own filter returns.
+    pickable = {
+        p["title"]
+        for p in client.get("/api/parts?sellable=true", headers=auth_headers).json()["items"]
+    }
+    assert pickable == {title for title, ok in listed.items() if ok}

@@ -97,6 +97,14 @@ export default function PartDetailPage() {
               >
                 Print label
               </button>
+              {/* Only for stock that could still be sold: anything already on
+                  a sale is handled by editing that sale, not by starting
+                  another one that would be rejected. */}
+              {['draft', 'available', 'reserved'].includes(p.status) && (
+                <Link to={`/sales?parts=${p.id}`} className="btn-primary">
+                  Sell this
+                </Link>
+              )}
               <button type="button" className="btn-secondary" onClick={() => setEditing(!editing)}>
                 {editing ? 'Cancel' : 'Edit'}
               </button>

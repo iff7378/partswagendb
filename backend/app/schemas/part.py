@@ -106,6 +106,7 @@ class PartRead(PartBase, ORMModel):
     sku: str
     status: PartStatus
     is_complete: bool
+    is_sellable: bool
     days_in_stock: int
     is_overdue: bool
     created_at: datetime

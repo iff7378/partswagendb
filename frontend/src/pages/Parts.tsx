@@ -12,6 +12,7 @@ const STATUSES = ['available', 'draft', 'reserved', 'sold', 'scrapped'] as const
 export default function Parts() {
   const [params, setParams] = useSearchParams()
   const [search, setSearch] = useState(params.get('q') ?? '')
+  const [picked, setPicked] = useState<number[]>([])
 
   const query = params.toString()
   const parts = useQuery({
@@ -214,13 +215,58 @@ export default function Parts() {
         />
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {picked.length > 0 && (
+        <div className="fixed inset-x-0 bottom-16 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:bottom-0">
+          <div className="mx-auto flex max-w-6xl items-center gap-3">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setPicked([])}
+            >
+              Clear
+            </button>
+            <span className="text-sm text-ink-soft">
+              {picked.length} {picked.length === 1 ? 'part' : 'parts'} selected
+            </span>
+            <Link to={`/sales?parts=${picked.join(',')}`} className="btn-primary ml-auto">
+              Sell {picked.length === 1 ? 'it' : 'them together'}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${picked.length > 0 ? 'pb-24' : ''}`}
+      >
         {parts.data?.items.map((part) => (
           <Link
             key={part.id}
             to={`/parts/${part.id}`}
-            className="card overflow-hidden transition hover:border-rust"
+            className="card relative overflow-hidden transition hover:border-rust"
           >
+            {part.is_sellable && (
+              // Sits over the photo so ticking never opens the part. A large
+              // hit area, because this gets used with cold hands.
+              <label
+                className="absolute left-2 top-2 z-10 grid h-9 w-9 cursor-pointer place-items-center rounded-lg bg-white/90 shadow-sm ring-1 ring-slate-200 backdrop-blur"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 rounded border-slate-300 text-rust focus:ring-rust"
+                  checked={picked.includes(part.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) =>
+                    setPicked((prev) =>
+                      e.target.checked
+                        ? [...prev, part.id]
+                        : prev.filter((id) => id !== part.id),
+                    )
+                  }
+                  aria-label={`Select ${part.title}`}
+                />
+              </label>
+            )}
             {part.primary_photo_url ? (
               <img
                 src={part.primary_photo_url}

@@ -33,10 +33,7 @@ const STATE_FILTERS: { value: string; label: string }[] = [
 
 function StateChip({ state }: { state: SaleState }) {
   return (
-    <span
-      className={`chip ring-1 ${SALE_STATE_STYLES[state]}`}
-      title={SALE_STATE_HINTS[state]}
-    >
+    <span className={`chip ring-1 ${SALE_STATE_STYLES[state]}`} title={SALE_STATE_HINTS[state]}>
       {SALE_STATE_LABELS[state]}
     </span>
   )
@@ -67,16 +64,31 @@ const CHANNEL_LABELS: Record<SaleChannel, string> = {
 
 export default function Sales() {
   const { canEdit } = useAuth()
-  const [adding, setAdding] = useState(false)
-  const [state, setState] = useState('')
-  // Arriving from the schedule opens that sale straight away.
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
+  // Arriving from the schedule opens that sale straight away; arriving from a
+  // part or a selection on the parts page opens a new sale with them on it.
   const openId = Number(params.get('open')) || null
+  const seededParts = (params.get('parts') ?? '')
+    .split(',')
+    .map(Number)
+    .filter((id) => Number.isFinite(id) && id > 0)
+
+  const [adding, setAdding] = useState(seededParts.length > 0)
+  const [state, setState] = useState('')
+
+  function closeForm() {
+    setAdding(false)
+    // Drop the seed so a refresh does not reopen a form already dealt with.
+    if (params.has('parts')) {
+      const next = new URLSearchParams(params)
+      next.delete('parts')
+      setParams(next, { replace: true })
+    }
+  }
 
   const sales = useQuery({
     queryKey: ['sales', state],
-    queryFn: () =>
-      api.get<Page<Sale>>(`/sales?limit=100${state ? `&state=${state}` : ''}`),
+    queryFn: () => api.get<Page<Sale>>(`/sales?limit=100${state ? `&state=${state}` : ''}`),
   })
 
   // What is agreed but not yet in the bank. Worth seeing without hunting.
@@ -91,7 +103,11 @@ export default function Sales() {
         subtitle={sales.data ? `${sales.data.total} recorded` : undefined}
         actions={
           canEdit && (
-            <button type="button" className="btn-primary" onClick={() => setAdding(!adding)}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => (adding ? closeForm() : setAdding(true))}
+            >
               {adding ? 'Cancel' : 'Record a sale'}
             </button>
           )
@@ -100,29 +116,31 @@ export default function Sales() {
 
       <SalesTabs />
 
-      <div className="card mb-5 flex flex-wrap items-center gap-3 p-4">
-        <label className="flex items-center gap-2 text-sm text-ink-soft">
-          Showing
-          <select
-            className="field !w-auto !py-1.5 !text-sm"
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-          >
-            {STATE_FILTERS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {owed > 0 && (
-          <p className="ml-auto text-sm text-ink-soft">
-            <strong className="text-amber-900">{money(owed)}</strong> agreed but not paid
-          </p>
-        )}
-      </div>
+      {!adding && (
+        <div className="card mb-5 flex flex-wrap items-center gap-3 p-4">
+          <label className="flex items-center gap-2 text-sm text-ink-soft">
+            Showing
+            <select
+              className="field !w-auto !py-1.5 !text-sm"
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+            >
+              {STATE_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {owed > 0 && (
+            <p className="ml-auto text-sm text-ink-soft">
+              <strong className="text-amber-900">{money(owed)}</strong> agreed but not paid
+            </p>
+          )}
+        </div>
+      )}
 
-      {adding && <NewSaleForm onDone={() => setAdding(false)} />}
+      {adding && <NewSaleForm seededParts={seededParts} onDone={closeForm} />}
 
       <ErrorNote error={sales.error} />
       {sales.isLoading && <Spinner />}
@@ -136,19 +154,20 @@ export default function Sales() {
 
       <div className="card divide-y divide-slate-100">
         {sales.data?.items.map((sale) => (
-          <SaleRow
-            key={sale.id}
-            sale={sale}
-            canEdit={canEdit}
-            startOpen={sale.id === openId}
-          />
+          <SaleRow key={sale.id} sale={sale} canEdit={canEdit} startOpen={sale.id === openId} />
         ))}
       </div>
     </>
   )
 }
 
-function NewSaleForm({ onDone }: { onDone: () => void }) {
+function NewSaleForm({
+  seededParts,
+  onDone,
+}: {
+  seededParts: number[]
+  onDone: () => void
+}) {
   const queryClient = useQueryClient()
   const [form, setForm] = useState({
     sold_on: new Date().toISOString().slice(0, 10),
@@ -164,7 +183,9 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
   const [paid, setPaid] = useState(true)
   const [gone, setGone] = useState(true)
   const [meetup, setMeetup] = useState('')
-  const [lines, setLines] = useState<Line[]>([{ ...EMPTY_LINE }])
+  const [lines, setLines] = useState<Line[]>(() => [
+    { ...EMPTY_LINE, partIds: seededParts },
+  ])
 
   const users = useQuery({
     queryKey: ['users'],
@@ -209,10 +230,10 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
   const net = subtotal + Number(form.shipping || 0) + Number(form.tax || 0) - Number(form.fees || 0)
 
   return (
-    <form onSubmit={onSubmit} className="card mb-5 space-y-4 p-4">
+    <form onSubmit={onSubmit} className="card mb-5 space-y-4 p-4 pb-32 md:pb-28">
       <ErrorNote error={create.error} />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Sold on">
           <input
             type="date"
@@ -236,7 +257,7 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
           </select>
         </Field>
 
-        <Field label="Buyer" hint="Starts suggesting once you have sold to someone before.">
+        <Field label="Buyer" hint="Suggests names you have sold to before.">
           <SuggestInput
             field="buyer_name"
             className="field"
@@ -311,41 +332,54 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
         </p>
       </fieldset>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Shipping">
-          <input
-            className="field"
-            inputMode="decimal"
-            value={form.shipping}
-            onChange={(e) => setForm((p) => ({ ...p, shipping: e.target.value }))}
-          />
-        </Field>
-        <Field label="Fees">
-          <input
-            className="field"
-            inputMode="decimal"
-            value={form.fees}
-            onChange={(e) => setForm((p) => ({ ...p, fees: e.target.value }))}
-          />
-        </Field>
-        <Field label="Tax">
-          <input
-            className="field"
-            inputMode="decimal"
-            value={form.tax}
-            onChange={(e) => setForm((p) => ({ ...p, tax: e.target.value }))}
-          />
-        </Field>
-      </div>
+      {/* Folded away: across every sale recorded so far all three have been
+          zero, so as permanent fields they cost three rows and buy nothing. */}
+      <details className="rounded-lg border border-slate-200 px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-ink-soft">
+          Shipping, fees or tax
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <Field label="Shipping">
+            <input
+              className="field"
+              inputMode="decimal"
+              value={form.shipping}
+              onChange={(e) => setForm((p) => ({ ...p, shipping: e.target.value }))}
+            />
+          </Field>
+          <Field label="Fees">
+            <input
+              className="field"
+              inputMode="decimal"
+              value={form.fees}
+              onChange={(e) => setForm((p) => ({ ...p, fees: e.target.value }))}
+            />
+          </Field>
+          <Field label="Tax">
+            <input
+              className="field"
+              inputMode="decimal"
+              value={form.tax}
+              onChange={(e) => setForm((p) => ({ ...p, tax: e.target.value }))}
+            />
+          </Field>
+        </div>
+      </details>
 
-      <div className="flex items-center justify-between rounded-lg bg-slate-100 px-4 py-3">
-        <span className="text-sm text-ink-soft">Cash actually collected</span>
-        <span className="text-lg font-bold tabular-nums">{money(net)}</span>
+      {/* Fixed rather than sticky: a sticky element that is the last child of
+          its container has nothing below it to stick against, so it never
+          pins. Sits above the mobile tab bar, which is 4rem tall. */}
+      <div className="fixed inset-x-0 bottom-16 z-10 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:bottom-0">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm text-ink-soft">Cash actually collected</span>
+            <span className="text-lg font-bold tabular-nums">{money(net)}</span>
+          </div>
+          <button type="submit" className="btn-primary w-full" disabled={create.isPending}>
+            {create.isPending ? 'Saving…' : 'Record this sale'}
+          </button>
+        </div>
       </div>
-
-      <button type="submit" className="btn-primary w-full" disabled={create.isPending}>
-        {create.isPending ? 'Saving…' : 'Record this sale'}
-      </button>
     </form>
   )
 }
@@ -420,9 +454,7 @@ function SaleRow({
             {sale.reference} · {date(sale.sold_on)} · collected by {sale.collected_by.full_name}
           </p>
           {sale.meetup_at && !sale.fulfilled_on && (
-            <p className="text-xs font-medium text-rust">
-              Pickup {dateTime(sale.meetup_at)}
-            </p>
+            <p className="text-xs font-medium text-rust">Pickup {dateTime(sale.meetup_at)}</p>
           )}
         </div>
         <div className="text-right">
@@ -610,7 +642,7 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
 
       <SaleLines lines={lines} onChange={setLines} keepPartIds={keepPartIds} />
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <Field label="Sold on">
           <input
             type="date"

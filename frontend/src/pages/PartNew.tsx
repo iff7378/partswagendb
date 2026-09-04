@@ -143,7 +143,7 @@ export default function PartNew() {
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="space-y-4">
+      <form onSubmit={onSubmit} className="space-y-4 pb-28">
         <ErrorNote error={save.error} />
 
         <div className="card space-y-3 p-4">
@@ -318,7 +318,9 @@ export default function PartNew() {
           </Field>
         </div>
 
-        <div className="sticky bottom-16 flex gap-2 md:bottom-0">
+        {/* Fixed, not sticky: as the last child of the form there is nothing
+            below it to stick against, so sticky never actually pinned. */}
+        <div className="fixed inset-x-0 bottom-16 z-10 flex gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur md:bottom-0">
           <button
             type="button"
             className="btn-secondary flex-1"

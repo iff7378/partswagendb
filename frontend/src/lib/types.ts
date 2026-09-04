@@ -156,6 +156,8 @@ export interface Part {
   asking_price: string | null
   notes: string | null
   is_complete: boolean
+  /** Could still go on a sale: right status, and not already on one. */
+  is_sellable: boolean
   days_in_stock: number
   is_overdue: boolean
   age_alert_days: number | null

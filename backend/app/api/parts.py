@@ -22,6 +22,9 @@ _LOADERS = (
     selectinload(Part.location),
     selectinload(Part.tags),
     selectinload(Part.photos),
+    # is_sellable asks whether a part is already on a sale, so the rows have to
+    # come along or every part costs an extra query.
+    selectinload(Part.sale_items),
 )
 
 

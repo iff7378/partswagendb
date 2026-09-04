@@ -77,6 +77,17 @@ class Part(Base, TimestampMixin):
     )
 
     @property
+    def is_sellable(self) -> bool:
+        """Could still go on a sale.
+
+        Status alone is not enough: a part reserved against a pending sale is
+        spoken for, and offering it again only earns a rejection at the till.
+        """
+        if self.status not in (PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED):
+            return False
+        return not self.sale_items
+
+    @property
     def days_in_stock(self) -> int:
         """Days since the part was catalogued."""
         created = self.created_at
