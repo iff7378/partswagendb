@@ -101,12 +101,71 @@ export default function VehicleResults() {
         </div>
       )}
 
-      {Number(results.data?.general_expenses ?? 0) > 0 && (
-        <p className="mt-2 text-sm text-ink-soft">
-          A further {money(results.data!.general_expenses)} of costs belong to no particular car,
-          so the profit above is higher than the venture&rsquo;s.
-        </p>
+      {results.data && rows.length > 0 && (
+        <Reconciliation results={results.data} carRevenue={totals.earned} carProfit={totals.profit} />
       )}
     </section>
+  )
+}
+
+/**
+ * Why the rows above do not add up to the venture's figures.
+ *
+ * They legitimately differ: overheads belong to no car, fees are charged on a
+ * sale rather than a line. Stating the arithmetic is the point -- an
+ * unexplained gap between two screens is how confidence in the numbers goes.
+ */
+function Reconciliation({
+  results,
+  carRevenue,
+  carProfit,
+}: {
+  results: Results
+  carRevenue: number
+  carProfit: number
+}) {
+  const overheads = Number(results.general_expenses)
+  const unattributed = Number(results.unattributed_revenue)
+  const adjustments = Number(results.sale_adjustments)
+
+  if (overheads === 0 && unattributed === 0 && adjustments === 0) return null
+
+  const rows: { label: string; value: number }[] = [
+    { label: 'Taken across every car', value: carRevenue },
+  ]
+  if (unattributed !== 0) {
+    rows.push({ label: 'Sold with no car attached', value: unattributed })
+  }
+  if (adjustments !== 0) {
+    rows.push({ label: 'Shipping and tax, less fees', value: adjustments })
+  }
+  if (overheads !== 0) {
+    rows.push({ label: 'Costs not tied to a car', value: -overheads })
+  }
+
+  return (
+    <details className="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+      <summary className="cursor-pointer font-medium text-ink-soft">
+        Why this does not match the totals at the top
+      </summary>
+      <dl className="mt-3 space-y-1">
+        {rows.map((row) => (
+          <div key={row.label} className="flex justify-between gap-4">
+            <dt className="text-ink-soft">{row.label}</dt>
+            <dd className="tabular-nums">{money(row.value)}</dd>
+          </div>
+        ))}
+        <div className="flex justify-between gap-4 border-t border-slate-200 pt-1 font-semibold">
+          <dt>The venture&rsquo;s profit</dt>
+          <dd className="tabular-nums">
+            {money(carProfit + unattributed + adjustments - overheads)}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-2 text-xs text-ink-soft">
+        A car&rsquo;s figure is what its parts fetched. Fees are charged on a whole sale and
+        overheads belong to the venture, so neither can be pinned to one car.
+      </p>
+    </details>
   )
 }

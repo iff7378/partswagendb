@@ -178,6 +178,16 @@ class VehicleResults(BaseModel):
     # Overheads belong to the venture, not to any one car, so they sit outside
     # the per-car rows and are why these never sum to the settle-up profit.
     general_expenses: Decimal = ZERO
+    # Money that is real but belongs to no car, so the rows above can be
+    # reconciled against the ledger instead of quietly disagreeing with it:
+    #
+    #   ledger revenue = sum(car revenue) + unattributed + adjustments
+    #
+    # Unattributed is a line naming no car whose parts came off none either.
+    # Adjustments are shipping and tax less fees, which are charged on the sale
+    # as a whole and so cannot be pinned to one car.
+    unattributed_revenue: Decimal = ZERO
+    sale_adjustments: Decimal = ZERO
 
 
 @router.get("/reports/by-vehicle", response_model=VehicleResults)
@@ -218,14 +228,23 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
     # Revenue is attributed the same way the single-car page does it: a line
     # named against a car counts there, otherwise it follows its parts. Line
     # ids are collected first so a lot covering several parts is counted once.
+    # Unpaid sales are not income yet, so they stay out of every car's return
+    # exactly as they stay off the ledger and off the single-car page.
     named = db.execute(
-        select(SaleItem.vehicle_id, SaleItem.id, line_total).where(SaleItem.vehicle_id.is_not(None))
+        select(SaleItem.vehicle_id, SaleItem.id, line_total)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(SaleItem.vehicle_id.is_not(None), Sale.paid_on.is_not(None))
     ).all()
     via_parts = db.execute(
         select(Part.vehicle_id, SaleItem.id, line_total)
         .select_from(SaleItem)
+        .join(Sale, Sale.id == SaleItem.sale_id)
         .join(SaleItem.parts)
-        .where(SaleItem.vehicle_id.is_(None), Part.vehicle_id.is_not(None))
+        .where(
+            SaleItem.vehicle_id.is_(None),
+            Part.vehicle_id.is_not(None),
+            Sale.paid_on.is_not(None),
+        )
     ).all()
 
     revenue: dict[int, Decimal] = {}
@@ -251,6 +270,17 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
         if vehicle_id is not None
     }
 
+    # Everything the cars could not account for, so the totals can be checked.
+    paid_lines = db.execute(
+        select(func.sum(line_total))
+        .select_from(SaleItem)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.paid_on.is_not(None))
+    ).scalar_one_or_none()
+    adjustments = db.execute(
+        select(func.sum(Sale.shipping + Sale.tax - Sale.fees)).where(Sale.paid_on.is_not(None))
+    ).scalar_one_or_none()
+
     rows: list[VehicleResult] = []
     for vehicle in db.execute(select(Vehicle).order_by(Vehicle.created_at.desc())).scalars():
         total, sold = part_counts.get(vehicle.id, (0, 0))
@@ -272,7 +302,13 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
             )
         )
 
-    return VehicleResults(vehicles=rows, general_expenses=money(general) if general else ZERO)
+    attributed = sum(revenue.values(), ZERO)
+    return VehicleResults(
+        vehicles=rows,
+        general_expenses=money(general) if general else ZERO,
+        unattributed_revenue=money(paid_lines or 0) - money(attributed),
+        sale_adjustments=money(adjustments or 0),
+    )
 
 
 class AppMetrics(BaseModel):

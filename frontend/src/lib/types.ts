@@ -306,6 +306,10 @@ export interface VehicleResults {
   vehicles: VehicleResult[]
   /** Overheads belonging to no car, which is why the rows never sum to profit. */
   general_expenses: string
+  /** Paid lines that reached no car at all. */
+  unattributed_revenue: string
+  /** Shipping and tax less fees, charged per sale rather than per car. */
+  sale_adjustments: string
 }
 
 export interface AppMetrics {

@@ -211,7 +211,9 @@ function PartPicker({
       (p) =>
         p.title.toLowerCase().includes(term) ||
         p.sku.toLowerCase().includes(term) ||
-        (p.part_number ?? '').toLowerCase().includes(term),
+        (p.part_number ?? '').toLowerCase().includes(term) ||
+        (p.vehicle?.display_name ?? '').toLowerCase().includes(term) ||
+        (p.location?.code ?? '').toLowerCase().includes(term),
     )
   }, [parts, filter])
 
@@ -221,7 +223,7 @@ function PartPicker({
         className="field"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder="Search stock by name, SKU or part number…"
+        placeholder="Search stock by name, SKU, part number, car or shelf…"
       />
 
       {loading && <p className="text-sm text-ink-soft">Loading stock…</p>}
@@ -250,7 +252,14 @@ function PartPicker({
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{part.title}</span>
-                <span className="font-mono text-xs text-ink-soft">{part.sku}</span>
+                <span className="block truncate text-xs text-ink-soft">
+                  <span className="font-mono">{part.sku}</span>
+                  {/* Three identical "Emissions System" rows are impossible to
+                      tell apart on SKU alone; the car is what you actually
+                      know the part by. */}
+                  {part.vehicle && ` · ${part.vehicle.display_name}`}
+                  {part.location && ` · ${part.location.code}`}
+                </span>
               </span>
               <StatusChip status={part.status} />
               <span className="w-16 text-right text-sm tabular-nums text-ink-soft">
