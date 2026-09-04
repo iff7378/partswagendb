@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
 
 import SaleLines from '../components/SaleLines'
+import SuggestInput from '../components/SuggestInput'
 import SalesTabs from '../components/SalesTabs'
 import { EMPTY_LINE, subtotalOf, toPayload, voidWarning } from '../lib/saleLines'
 import type { Line } from '../lib/saleLines'
@@ -235,8 +236,9 @@ function NewSaleForm({ onDone }: { onDone: () => void }) {
           </select>
         </Field>
 
-        <Field label="Buyer">
-          <input
+        <Field label="Buyer" hint="Starts suggesting once you have sold to someone before.">
+          <SuggestInput
+            field="buyer_name"
             className="field"
             value={form.buyer_name}
             onChange={(e) => setForm((p) => ({ ...p, buyer_name: e.target.value }))}
@@ -632,8 +634,9 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
           </select>
         </Field>
 
-        <Field label="Buyer">
-          <input
+        <Field label="Buyer" hint="Starts suggesting once you have sold to someone before.">
+          <SuggestInput
+            field="buyer_name"
             className="field"
             value={form.buyer_name}
             onChange={(e) => setForm((p) => ({ ...p, buyer_name: e.target.value }))}

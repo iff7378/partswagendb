@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import SuggestInput from '../components/SuggestInput'
 import { ErrorNote, Field, PageHeader, Spinner, Stat, StatusChip } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -437,7 +438,8 @@ function ScrapPanel({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =>
         </Field>
 
         <Field label="Which yard">
-          <input
+          <SuggestInput
+            field="buyer_name"
             className="field"
             value={form.yard}
             onChange={(e) => setForm((p) => ({ ...p, yard: e.target.value }))}
@@ -980,7 +982,8 @@ function EditVehicle({ vehicle, onDone }: { vehicle: VehicleDetail; onDone: () =
           />
         </Field>
         <Field label="Bought from">
-          <input
+          <SuggestInput
+            field="acquired_from"
             className="field"
             value={form.acquired_from}
             onChange={(e) => set('acquired_from', e.target.value)}

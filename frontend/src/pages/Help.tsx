@@ -387,6 +387,17 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
         <P>
           Defaults to the current calendar quarter. Change the dates for any other period.
         </P>
+        <P>
+          <strong>Every line</strong> is the same money in full detail: one row per sale line,
+          cost and settlement, oldest first, with the car and the person attached. The bottom
+          of the column adds up to the profit at the top, so you can check the summary rather
+          than take its word for it. Filter by kind or car, and export the result as a
+          spreadsheet.
+        </P>
+        <Note>
+          Rows in grey are agreed but not paid. They are listed so you know they exist, and
+          count towards nothing until the money lands.
+        </Note>
       </>
     ),
   },
@@ -419,7 +430,14 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           </>,
           <>
             <strong>Per-car profit will not add up to the venture&rsquo;s profit.</strong> Shared
-            costs sit outside the cars on purpose.
+            costs sit outside the cars on purpose, and fees are charged on a whole sale rather
+            than on one car. The Money page shows that arithmetic under &ldquo;Why this does not
+            match the totals at the top&rdquo;.
+          </>,
+          <>
+            <strong>Type-ahead only knows what you have entered before.</strong> Buyer, yard and
+            part-name fields suggest previous entries so the same thing keeps the same name. A
+            new name is always accepted &mdash; just keep typing.
           </>,
           <>
             <strong>Deleting a car keeps its sales.</strong> The sale record survives with its

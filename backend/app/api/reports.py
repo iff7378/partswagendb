@@ -3,7 +3,7 @@ import io
 from datetime import date, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -381,4 +381,207 @@ def metrics(db: DbSession, _: RequireAdmin) -> AppMetrics:
         categories_total=count(PartCategory),
         tags_total=count(Tag),
         database_bytes=database_bytes,
+    )
+
+
+# Fields worth remembering what has been typed before. Buyers and yards share
+# one pool: the car page writes a yard's name into the sale's buyer_name.
+_SUGGESTION_FIELDS = {
+    "buyer_name": (Sale, Sale.buyer_name),
+    "part_title": (Part, Part.title),
+    "manufacturer": (Part, Part.manufacturer),
+    "acquired_from": (Vehicle, Vehicle.acquired_from),
+}
+
+
+@router.get("/suggestions/{field}", response_model=list[str])
+def suggestions(
+    db: DbSession,
+    _: CurrentUser,
+    field: str,
+    q: str | None = None,
+    limit: int = Query(default=25, le=100),
+) -> list[str]:
+    """What has been typed into this field before, commonest first.
+
+    Keeps naming consistent: the same item entered as "RL Door" on one car and
+    "Rear left door" on the next makes search and the listings export useless,
+    and there is no cheap way to fix it afterwards.
+    """
+    if field not in _SUGGESTION_FIELDS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No suggestions for {field}",
+        )
+
+    model, column = _SUGGESTION_FIELDS[field]
+    query = (
+        select(column, func.count().label("uses"))
+        .select_from(model)
+        .where(column.is_not(None), func.trim(column) != "")
+        .group_by(column)
+        # Commonest first so the regulars are at the top, then alphabetical so
+        # the list does not reshuffle unpredictably between visits.
+        .order_by(func.count().desc(), column.asc())
+        .limit(limit)
+    )
+    if q:
+        query = query.where(column.ilike(f"%{q.strip()}%"))
+
+    return [value for value, _ in db.execute(query).all()]
+
+
+class LedgerEntry(BaseModel):
+    """One movement of money, sale or cost, flattened for a statement."""
+
+    on: date
+    kind: str  # sale | expense | settlement
+    reference: str
+    description: str
+    vehicle_id: int | None = None
+    vehicle_name: str | None = None
+    person: str
+    # Positive is money in, negative is money out, so a column of these sums to
+    # the period's profit without the reader having to know the rules.
+    amount: Decimal
+    state: str | None = None
+    # False for an agreed-but-unpaid sale: shown, but outside every total.
+    counted: bool = True
+    sale_id: int | None = None
+
+
+class Ledger(BaseModel):
+    entries: list[LedgerEntry]
+    money_in: Decimal = ZERO
+    money_out: Decimal = ZERO
+    profit: Decimal = ZERO
+    # Agreed but not paid, so deliberately excluded from the three above.
+    uncounted: Decimal = ZERO
+
+
+@router.get("/reports/ledger", response_model=Ledger)
+def ledger(
+    db: DbSession,
+    _: CurrentUser,
+    period_start: date = Query(...),
+    period_end: date = Query(...),
+) -> Ledger:
+    """Every line behind the Money page, so the summary can be checked by eye.
+
+    A dashboard nobody can drill into is a black box, and a black box is worth
+    less than a spreadsheet however right it happens to be.
+    """
+    entries: list[LedgerEntry] = []
+
+    sales = db.execute(
+        select(Sale)
+        .options(
+            selectinload(Sale.collected_by),
+            selectinload(Sale.items).selectinload(SaleItem.vehicle),
+            selectinload(Sale.items).selectinload(SaleItem.parts).selectinload(Part.vehicle),
+        )
+        .where(Sale.sold_on >= period_start, Sale.sold_on <= period_end)
+    ).scalars()
+
+    for sale in sales:
+        counted = sale.paid_on is not None
+        for item in sale.items:
+            vehicle = item.vehicle or next(
+                (part.vehicle for part in item.parts if part.vehicle), None
+            )
+            entries.append(
+                LedgerEntry(
+                    # Paid lines sit on the day the money landed, which is the
+                    # day they hit the totals; unpaid ones on the day agreed.
+                    on=sale.paid_on or sale.sold_on,
+                    kind="sale",
+                    reference=sale.reference,
+                    description=item.description,
+                    vehicle_id=vehicle.id if vehicle else None,
+                    vehicle_name=vehicle.display_name if vehicle else None,
+                    person=sale.collected_by.full_name,
+                    amount=money(item.line_total),
+                    state=sale.state,
+                    counted=counted,
+                    sale_id=sale.id,
+                )
+            )
+        # Charged on the sale rather than any line, so they get their own row
+        # instead of being folded invisibly into one.
+        adjustment = money(sale.shipping + sale.tax - sale.fees)
+        if adjustment != ZERO:
+            entries.append(
+                LedgerEntry(
+                    on=sale.paid_on or sale.sold_on,
+                    kind="sale",
+                    reference=sale.reference,
+                    description="Shipping and tax, less fees",
+                    person=sale.collected_by.full_name,
+                    amount=adjustment,
+                    state=sale.state,
+                    counted=counted,
+                    sale_id=sale.id,
+                )
+            )
+
+    expenses = db.execute(
+        select(VehicleExpense)
+        .options(selectinload(VehicleExpense.paid_by), selectinload(VehicleExpense.vehicle))
+        .where(
+            VehicleExpense.incurred_on >= period_start,
+            VehicleExpense.incurred_on <= period_end,
+        )
+    ).scalars()
+
+    for expense in expenses:
+        entries.append(
+            LedgerEntry(
+                on=expense.incurred_on,
+                kind="expense",
+                reference=expense.category,
+                description=expense.description,
+                vehicle_id=expense.vehicle_id,
+                vehicle_name=expense.vehicle.display_name if expense.vehicle else None,
+                person=expense.paid_by.full_name,
+                amount=-money(expense.amount),
+            )
+        )
+
+    settlements = db.execute(
+        select(Settlement)
+        .options(selectinload(Settlement.from_user), selectinload(Settlement.to_user))
+        .where(Settlement.paid_on >= period_start, Settlement.paid_on <= period_end)
+    ).scalars()
+
+    for settlement in settlements:
+        entries.append(
+            LedgerEntry(
+                on=settlement.paid_on,
+                kind="settlement",
+                reference="settle up",
+                description=(
+                    f"{settlement.from_user.full_name} paid {settlement.to_user.full_name}"
+                ),
+                person=settlement.from_user.full_name,
+                # Moves cash between partners without changing what the venture
+                # made, so it is shown at zero rather than counted twice.
+                amount=ZERO,
+            )
+        )
+
+    entries.sort(key=lambda entry: (entry.on, entry.kind, entry.reference))
+
+    # Split by what the row *is*, not by its sign, so these match the Money
+    # page exactly. Fees are a negative sale row: they reduce what came in
+    # rather than counting as money spent, which is how the ledger treats them.
+    counted_entries = [entry for entry in entries if entry.counted]
+    money_in = money(sum((e.amount for e in counted_entries if e.kind == "sale"), ZERO))
+    money_out = money(-sum((e.amount for e in counted_entries if e.kind == "expense"), ZERO))
+
+    return Ledger(
+        entries=entries,
+        money_in=money_in,
+        money_out=money_out,
+        profit=money(money_in - money_out),
+        uncounted=money(sum((e.amount for e in entries if not e.counted), ZERO)),
     )

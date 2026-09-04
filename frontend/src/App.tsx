@@ -7,6 +7,7 @@ import { useAuth } from './lib/auth'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import Money from './pages/Money'
+import MoneyLedger from './pages/MoneyLedger'
 import PartDetailPage from './pages/PartDetail'
 import PartNew from './pages/PartNew'
 import Parts from './pages/Parts'
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/sales" element={<Sales />} />
         <Route path="/sales/schedule" element={<SaleSchedule />} />
         <Route path="/money" element={<Money />} />
+        <Route path="/money/ledger" element={<MoneyLedger />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/help" element={<Help />} />
         <Route

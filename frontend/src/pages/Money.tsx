@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 
 import GeneralExpenses from '../components/GeneralExpenses'
+import MoneyTabs from '../components/MoneyTabs'
 import VehicleResults from '../components/VehicleResults'
 import { ErrorNote, PageHeader, Spinner, Stat } from '../components/ui'
 import { api } from '../lib/api'
@@ -42,6 +43,8 @@ export default function Money() {
         title="Money"
         subtitle="Who paid for what, who collected what, and who owes whom"
       />
+
+      <MoneyTabs />
 
       <div className="card mb-5 flex flex-wrap items-end gap-3 p-4">
         <label className="flex-1">

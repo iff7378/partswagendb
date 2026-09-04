@@ -230,3 +230,67 @@ def test_voiding_everything_returns_the_books_to_zero(
     assert {p["status"] for p in parts} == {"available"}
     detail = client.get(f"/api/vehicles/{state['car']['id']}", headers=auth_headers).json()
     assert detail["status"] == "stripped"
+
+
+def test_the_ledger_adds_up_to_the_summary(client: TestClient, auth_headers, admin) -> None:
+    """The drill-down must agree with the dashboard it drills into."""
+    _lifecycle(client, auth_headers, admin)
+
+    summary = client.get(f"/api/settle-up?{PERIOD}", headers=auth_headers).json()
+    ledger = client.get(
+        "/api/reports/ledger?period_start=2020-01-01&period_end=2030-12-31",
+        headers=auth_headers,
+    ).json()
+
+    assert D(ledger["money_in"]) == D(summary["total_revenue"])
+    assert D(ledger["money_out"]) == D(summary["total_expenses"])
+    assert D(ledger["profit"]) == D(summary["profit"])
+
+    # Every counted row, added up, is the profit. Nothing hidden.
+    counted = sum(D(e["amount"]) for e in ledger["entries"] if e["counted"])
+    assert counted == D(summary["profit"])
+
+    # The unpaid sale is present but excluded, and says so.
+    unpaid = [e for e in ledger["entries"] if not e["counted"]]
+    assert len(unpaid) == 1
+    assert unpaid[0]["state"] == "pending"
+    assert D(ledger["uncounted"]) == D("150.00")
+
+    # Fees are their own row rather than folded silently into a line.
+    adjustments = [e for e in ledger["entries"] if "less fees" in e["description"]]
+    assert len(adjustments) == 1
+    assert D(adjustments[0]["amount"]) == D("-20.00")
+
+
+def test_the_ledger_names_the_car_behind_each_line(client: TestClient, auth_headers, admin) -> None:
+    state = _lifecycle(client, auth_headers, admin)
+    ledger = client.get(
+        "/api/reports/ledger?period_start=2020-01-01&period_end=2030-12-31",
+        headers=auth_headers,
+    ).json()
+
+    named = {e["description"]: e["vehicle_name"] for e in ledger["entries"]}
+    # Derived from the parts, not just from a line that happens to name a car.
+    assert named["Alternator"] == "Test wagon"
+    assert named["Interior"] == "Test wagon"
+    assert named["Loose trim"] == "Test wagon"
+    assert named["Bought the car"] == "Test wagon"
+    # An overhead belongs to no car and must not be pinned to one.
+    assert named["Cutting discs"] is None
+    assert state["car"]["nickname"] == "Test wagon"
+
+
+def test_suggestions_offer_what_was_typed_before(client: TestClient, auth_headers, admin) -> None:
+    for title in ("RL Door", "RL Door", "Alternator"):
+        client.post("/api/parts", headers=auth_headers, json={"title": title})
+
+    titles = client.get("/api/suggestions/part_title", headers=auth_headers)
+    assert titles.status_code == 200
+    # Commonest first, so the name already used twice leads.
+    assert titles.json()[0] == "RL Door"
+    assert "Alternator" in titles.json()
+
+    filtered = client.get("/api/suggestions/part_title?q=alt", headers=auth_headers).json()
+    assert filtered == ["Alternator"]
+
+    assert client.get("/api/suggestions/nonsense", headers=auth_headers).status_code == 404

@@ -375,3 +375,27 @@ export interface VehicleSaleLine {
   /** 'shell', 'car' (a lot named against it) or 'parts'. */
   via: string
 }
+
+export interface LedgerEntry {
+  on: string
+  kind: 'sale' | 'expense' | 'settlement'
+  reference: string
+  description: string
+  vehicle_id: number | null
+  vehicle_name: string | null
+  person: string
+  /** Positive is money in, negative is money out. */
+  amount: string
+  state: SaleState | null
+  /** False for an agreed-but-unpaid sale: shown, but outside every total. */
+  counted: boolean
+  sale_id: number | null
+}
+
+export interface Ledger {
+  entries: LedgerEntry[]
+  money_in: string
+  money_out: string
+  profit: string
+  uncounted: string
+}

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
+import SuggestInput from '../components/SuggestInput'
 import { ErrorNote, Field, PageHeader } from '../components/ui'
 import { api } from '../lib/api'
 import { CONDITION_LABELS } from '../lib/format'
@@ -216,8 +217,12 @@ export default function PartNew() {
         </div>
 
         <div className="card space-y-3 p-4">
-          <Field label="What is it">
-            <input
+          <Field
+            label="What is it"
+            hint="Pick a name you have used before so the same part is always called the same thing."
+          >
+            <SuggestInput
+              field="part_title"
               className="field"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
