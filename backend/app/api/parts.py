@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -8,9 +9,27 @@ from sqlalchemy.sql.elements import UnaryExpression
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.db import days_since
 from app.enums import PartCondition, PartStatus
-from app.models import Location, Part, PartCategory, Sale, SaleItem, Tag, Vehicle
+from app.models import (
+    Location,
+    Part,
+    PartCategory,
+    PartListing,
+    Sale,
+    SaleItem,
+    Tag,
+    Vehicle,
+)
 from app.schemas.common import Message, Page
-from app.schemas.part import PartCreate, PartDetail, PartMove, PartRead, PartUpdate
+from app.schemas.part import (
+    ListingCreate,
+    ListingRead,
+    ListingUpdate,
+    PartCreate,
+    PartDetail,
+    PartMove,
+    PartRead,
+    PartUpdate,
+)
 from app.services.identifiers import next_part_sku
 from app.services.storage import delete_object, presigned_url
 
@@ -22,6 +41,7 @@ _LOADERS = (
     selectinload(Part.location),
     selectinload(Part.tags),
     selectinload(Part.photos),
+    selectinload(Part.listings),
     # is_sellable asks whether a part is already on a sale, so the rows have to
     # come along or every part costs an extra query.
     selectinload(Part.sale_items),
@@ -224,6 +244,37 @@ def create_part(db: DbSession, user: RequireEditor, payload: PartCreate) -> Part
     return _to_detail(_get_or_404(db, part.id))
 
 
+@router.patch("/listings/{listing_id}", response_model=ListingRead)
+def update_listing(
+    db: DbSession, _: RequireEditor, listing_id: int, payload: ListingUpdate
+) -> PartListing:
+    listing = db.get(PartListing, listing_id)
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(listing, field, value)
+
+    db.commit()
+    db.refresh(listing)
+    return listing
+
+
+@router.delete("/listings/{listing_id}", response_model=Message)
+def delete_listing(db: DbSession, _: RequireEditor, listing_id: int) -> Message:
+    """Remove a listing that should never have been recorded.
+
+    Taking an advert down is a PATCH setting removed_on: that is history worth
+    keeping. This is for a mistyped row.
+    """
+    listing = db.get(PartListing, listing_id)
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+    db.delete(listing)
+    db.commit()
+    return Message(detail="Listing removed")
+
+
 @router.get("/{part_id}", response_model=PartDetail)
 def get_part(db: DbSession, _: CurrentUser, part_id: int) -> PartDetail:
     return _to_detail(_get_or_404(db, part_id))
@@ -312,3 +363,29 @@ def delete_part(db: DbSession, _: RequireEditor, part_id: int) -> Message:
     db.delete(part)
     db.commit()
     return Message(detail=f"Deleted part {sku}")
+
+
+# --- Listings ------------------------------------------------------------
+
+
+@router.post("/{part_id}/listings", response_model=ListingRead, status_code=201)
+def add_listing(
+    db: DbSession, user: RequireEditor, part_id: int, payload: ListingCreate
+) -> PartListing:
+    """Record where a part has been advertised.
+
+    Several are expected: the same alternator gets cross-posted, and when it
+    sells every one of them needs taking down.
+    """
+    _get_or_404(db, part_id)
+
+    listing = PartListing(
+        part_id=part_id,
+        **payload.model_dump(exclude={"posted_on"}),
+        posted_on=payload.posted_on or date.today(),
+        created_by_id=user.id,
+    )
+    db.add(listing)
+    db.commit()
+    db.refresh(listing)
+    return listing

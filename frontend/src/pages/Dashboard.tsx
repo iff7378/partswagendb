@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 
 import { ErrorNote, PageHeader, Spinner, Stat } from '../components/ui'
 import { api } from '../lib/api'
-import { dateTime, humanAge, money } from '../lib/format'
-import type { DashboardStats, Page, Part, Schedule } from '../lib/types'
+import { LISTING_CHANNEL_LABELS, dateTime, humanAge, money } from '../lib/format'
+import type { DashboardStats, Page, Part, Schedule, StaleListing } from '../lib/types'
 
 export default function Dashboard() {
   const stats = useQuery({
@@ -21,6 +21,12 @@ export default function Dashboard() {
   const schedule = useQuery({
     queryKey: ['schedule', ''],
     queryFn: () => api.get<Schedule>('/sales/schedule'),
+  })
+
+  // Adverts still live for parts that have gone: the messages keep arriving.
+  const stale = useQuery({
+    queryKey: ['stale-listings'],
+    queryFn: () => api.get<StaleListing[]>('/reports/stale-listings'),
   })
 
   const aging = useQuery({
@@ -99,6 +105,40 @@ export default function Dashboard() {
                   {money(entry.net_collected)}
                 </span>
               </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(stale.data?.length ?? 0) > 0 && (
+        <div className="mt-8">
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-rose-700">
+            Still advertised but gone
+          </h2>
+          <p className="mb-3 text-sm text-ink-soft">
+            These have sold or been scrapped. Take the adverts down, then mark them here.
+          </p>
+          <div className="card divide-y divide-slate-100">
+            {stale.data?.map((row) => (
+              <div key={row.listing_id} className="flex items-center gap-3 px-4 py-3">
+                <Link to={`/parts/${row.part_id}`} className="min-w-0 flex-1 hover:text-rust">
+                  <span className="block truncate text-sm font-medium">{row.title}</span>
+                  <span className="block truncate text-xs text-ink-soft">
+                    {row.sku} · {LISTING_CHANNEL_LABELS[row.channel]}
+                    {row.account && ` · ${row.account}`}
+                  </span>
+                </Link>
+                {row.url && (
+                  <a
+                    href={row.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="btn-secondary !px-3 !py-1.5 !text-xs"
+                  >
+                    Open
+                  </a>
+                )}
+              </div>
             ))}
           </div>
         </div>

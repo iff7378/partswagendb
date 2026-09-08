@@ -1,12 +1,12 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy import Date, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.enums import PartCondition, PartStatus
+from app.enums import ListingChannel, PartCondition, PartStatus
 from app.models.base import TimestampMixin
 from app.models.catalog import part_tags
 
@@ -75,6 +75,9 @@ class Part(Base, TimestampMixin):
     sale_items: Mapped[list["SaleItem"]] = relationship(
         secondary="sale_item_parts", back_populates="parts"
     )
+    listings: Mapped[list["PartListing"]] = relationship(
+        back_populates="part", cascade="all, delete-orphan", order_by="PartListing.id"
+    )
 
     @property
     def is_sellable(self) -> bool:
@@ -110,3 +113,37 @@ class Part(Base, TimestampMixin):
     def is_complete(self) -> bool:
         """A part is ready to list once it has the fields a buyer needs."""
         return bool(self.title and self.category_id and self.location_id and self.asking_price)
+
+
+class PartListing(Base, TimestampMixin):
+    """Where a part is advertised, under which account, and the link to it.
+
+    Several per part on purpose: the same alternator gets cross-posted to
+    Facebook and eBay, and when it sells both need taking down.
+    """
+
+    __tablename__ = "part_listings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    part_id: Mapped[int] = mapped_column(
+        ForeignKey("parts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    part: Mapped["Part"] = relationship(back_populates="listings")
+
+    channel: Mapped[ListingChannel] = mapped_column(String(16), nullable=False)
+    # Which login it was posted under. Free text, because these are marketplace
+    # account names rather than users of this system.
+    account: Mapped[str | None] = mapped_column(String(128))
+    url: Mapped[str | None] = mapped_column(String(1024))
+
+    posted_on: Mapped[date] = mapped_column(Date, nullable=False)
+    # Set when the advert comes down. A listing that cannot be closed off turns
+    # into stale data the moment the part sells.
+    removed_on: Mapped[date | None] = mapped_column(Date)
+
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_by: Mapped["User | None"] = relationship()
+
+    @property
+    def is_live(self) -> bool:
+        return self.removed_on is None

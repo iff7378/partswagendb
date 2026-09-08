@@ -1,5 +1,6 @@
 import type {
   ExpenseCategory,
+  ListingChannel,
   PartCondition,
   PartStatus,
   SaleState,
@@ -208,4 +209,12 @@ export function dayLabel(value: string): string {
     month: 'short',
     day: 'numeric',
   })
+}
+
+export const LISTING_CHANNEL_LABELS: Record<ListingChannel, string> = {
+  facebook: 'Facebook Marketplace',
+  ebay: 'eBay',
+  craigslist: 'Craigslist',
+  offerup: 'OfferUp',
+  other: 'Somewhere else',
 }

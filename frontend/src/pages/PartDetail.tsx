@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import History from '../components/History'
+import Listings from '../components/Listings'
 import QrScanner from '../components/QrScannerLazy'
 import { ErrorNote, Field, PageHeader, Spinner, StatusChip } from '../components/ui'
 import { api, download } from '../lib/api'
@@ -288,6 +289,8 @@ export default function PartDetailPage() {
           </section>
         </div>
       )}
+
+      <Listings partId={p.id} listings={p.listings} />
 
       <History entity="Part" entityId={p.id} />
     </>

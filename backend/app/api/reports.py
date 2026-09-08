@@ -17,6 +17,7 @@ from app.models import (
     Location,
     Part,
     PartCategory,
+    PartListing,
     Photo,
     Sale,
     SaleItem,
@@ -402,6 +403,7 @@ _SUGGESTION_FIELDS = {
     "part_title": (Part, Part.title),
     "manufacturer": (Part, Part.manufacturer),
     "acquired_from": (Vehicle, Vehicle.acquired_from),
+    "listing_account": (PartListing, PartListing.account),
 }
 
 
@@ -645,3 +647,48 @@ def audit(
         limit=limit,
         offset=offset,
     )
+
+
+class StaleListing(BaseModel):
+    """An advert still up for something that is no longer for sale."""
+
+    listing_id: int
+    part_id: int
+    sku: str
+    title: str
+    channel: str
+    account: str | None = None
+    url: str | None = None
+    part_status: str
+
+
+@router.get("/reports/stale-listings", response_model=list[StaleListing])
+def stale_listings(db: DbSession, _: CurrentUser) -> list[StaleListing]:
+    """Adverts still live for parts that have sold or been scrapped.
+
+    A listing you cannot act on is worse than none: the part is gone, the
+    advert is not, and the messages keep arriving.
+    """
+    rows = db.execute(
+        select(PartListing, Part)
+        .join(Part, Part.id == PartListing.part_id)
+        .where(
+            PartListing.removed_on.is_(None),
+            Part.status.in_([PartStatus.SOLD, PartStatus.SCRAPPED]),
+        )
+        .order_by(PartListing.posted_on)
+    ).all()
+
+    return [
+        StaleListing(
+            listing_id=listing.id,
+            part_id=part.id,
+            sku=part.sku,
+            title=part.title,
+            channel=listing.channel,
+            account=listing.account,
+            url=listing.url,
+            part_status=part.status,
+        )
+        for listing, part in rows
+    ]

@@ -5,6 +5,7 @@ export type PartCondition = 'new' | 'a' | 'b' | 'c' | 'core' | 'salvage' | 'unkn
 export type VehicleStatus = 'acquired' | 'in_teardown' | 'stripped' | 'scrapped'
 export type LocationKind = 'site' | 'shelf' | 'bay' | 'bin'
 export type SaleState = 'pending' | 'paid' | 'gone' | 'complete' | 'voided'
+export type ListingChannel = 'facebook' | 'ebay' | 'craigslist' | 'offerup' | 'other'
 export type SaleChannel = 'ebay' | 'facebook' | 'local' | 'phone' | 'scrap' | 'other'
 export type ExpenseCategory =
   | 'purchase'
@@ -170,7 +171,30 @@ export interface Part {
   primary_photo_url: string | null
 }
 
+export interface PartListing {
+  id: number
+  part_id: number
+  channel: ListingChannel
+  account: string | null
+  url: string | null
+  posted_on: string
+  removed_on: string | null
+  is_live: boolean
+}
+
+export interface StaleListing {
+  listing_id: number
+  part_id: number
+  sku: string
+  title: string
+  channel: ListingChannel
+  account: string | null
+  url: string | null
+  part_status: PartStatus
+}
+
 export interface PartDetail extends Part {
+  listings: PartListing[]
   photos: Photo[]
   created_by: UserBrief | null
 }

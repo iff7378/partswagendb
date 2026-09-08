@@ -58,6 +58,20 @@ class ExpenseCategory(StrEnum):
     OTHER = "other"
 
 
+class ListingChannel(StrEnum):
+    """Where a part is advertised.
+
+    Separate from SaleChannel: that records where something actually sold, and
+    includes routes you cannot list on, like a scrap yard or a phone call.
+    """
+
+    FACEBOOK = "facebook"
+    EBAY = "ebay"
+    CRAIGSLIST = "craigslist"
+    OFFERUP = "offerup"
+    OTHER = "other"
+
+
 class SaleChannel(StrEnum):
     EBAY = "ebay"
     FACEBOOK = "facebook"

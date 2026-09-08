@@ -192,6 +192,28 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'listings',
+    title: 'Where a part is advertised',
+    body: (
+      <>
+        <P>
+          Each part keeps a <strong>Where it&rsquo;s listed</strong> panel: the marketplace, the
+          account it was posted under, and a link straight to the advert. Add as many as you
+          need &mdash; the same part cross-posted to Facebook and eBay gets a row each.
+        </P>
+        <P>
+          When it sells, hit <em>Taken down</em> on each one. The row stays, so you can still
+          see where it was advertised and for how long; it just stops counting as live.
+        </P>
+        <Note>
+          The home page lists <strong>Still advertised but gone</strong> &mdash; parts that have
+          sold or been scrapped while an advert is still up. That is the list to clear before
+          the messages start arriving about something you no longer have.
+        </Note>
+      </>
+    ),
+  },
+  {
     id: 'finding',
     title: 'Finding things',
     body: (

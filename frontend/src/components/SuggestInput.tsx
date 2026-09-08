@@ -5,7 +5,12 @@ import type { InputHTMLAttributes } from 'react'
 import { api } from '../lib/api'
 
 /** Fields the API will offer previously-typed values for. */
-export type SuggestField = 'buyer_name' | 'part_title' | 'manufacturer' | 'acquired_from'
+export type SuggestField =
+  | 'buyer_name'
+  | 'part_title'
+  | 'manufacturer'
+  | 'acquired_from'
+  | 'listing_account'
 
 type Props = InputHTMLAttributes<HTMLInputElement> & { field: SuggestField }
 

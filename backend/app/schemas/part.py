@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.enums import OcrStatus, PartCondition, PartStatus
+from app.enums import ListingChannel, OcrStatus, PartCondition, PartStatus
 from app.schemas.common import ORMModel
 from app.schemas.location import LocationRead
 from app.schemas.user import UserBrief
@@ -119,5 +119,34 @@ class PartRead(PartBase, ORMModel):
 
 
 class PartDetail(PartRead):
+    listings: list["ListingRead"] = Field(default_factory=list)
     photos: list[PhotoRead] = Field(default_factory=list)
     created_by: UserBrief | None = None
+
+
+class ListingBase(BaseModel):
+    channel: ListingChannel
+    account: str | None = Field(default=None, max_length=128)
+    url: str | None = Field(default=None, max_length=1024)
+    posted_on: date | None = None
+
+
+class ListingCreate(ListingBase):
+    pass
+
+
+class ListingUpdate(BaseModel):
+    channel: ListingChannel | None = None
+    account: str | None = Field(default=None, max_length=128)
+    url: str | None = Field(default=None, max_length=1024)
+    posted_on: date | None = None
+    # Set to close the advert off; null again to reopen it.
+    removed_on: date | None = None
+
+
+class ListingRead(ListingBase, ORMModel):
+    id: int
+    part_id: int
+    posted_on: date
+    removed_on: date | None = None
+    is_live: bool

@@ -43,6 +43,7 @@ AUDITED = {
     "Settlement": ("id",),
     "User": ("email", "id"),
     "Location": ("code", "id"),
+    "PartListing": ("url", "account", "id"),
 }
 
 # Noise: these move on every write and would bury the fields that matter.
