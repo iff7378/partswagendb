@@ -1606,3 +1606,23 @@ def test_a_voided_sale_is_off_the_schedule_and_the_books(
         "/api/reports/ledger?period_start=2026-01-01&period_end=2026-12-31", headers=auth_headers
     ).json()
     assert ledger["entries"] == []
+
+
+def test_in_stock_hides_what_has_gone(client: TestClient, auth_headers) -> None:
+    _part(client, auth_headers, "On the shelf", status="available")
+    _part(client, auth_headers, "A draft")
+    _part(client, auth_headers, "Reserved", status="reserved")
+    _part(client, auth_headers, "Long gone", status="sold")
+    _part(client, auth_headers, "Binned", status="scrapped")
+
+    def titles(query: str) -> set[str]:
+        return {
+            p["title"]
+            for p in client.get(f"/api/parts?{query}", headers=auth_headers).json()["items"]
+        }
+
+    assert titles("in_stock=true") == {"On the shelf", "A draft", "Reserved"}
+    # Not the default: other callers need the full picture.
+    assert len(titles("")) == 5
+    # And asking for sold explicitly still works.
+    assert titles("status=sold") == {"Long gone"}

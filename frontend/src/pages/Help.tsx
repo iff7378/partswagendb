@@ -223,6 +223,13 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           SKUs and part numbers, and filters by car, shelf, category, tag and condition.
         </P>
         <P>
+          It shows <strong>what you still have</strong> by default. Sold and scrapped parts are
+          finished business, so they sit behind <em>Everything, sold included</em> in the status
+          box &mdash; the same way voided sales are hidden until you ask for them. A car&rsquo;s
+          own page always lists every part that came off it, sold or not, because that is the
+          record of the car.
+        </P>
+        <P>
           <strong>Missing</strong> narrows to one gap at a time — no photos, no part number, not
           on a shelf, no price. It is deliberately one thing rather than
           &ldquo;incomplete&rdquo;, because almost nothing is ever fully filled in and a filter

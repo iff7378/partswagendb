@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { EmptyState, ErrorNote, PageHeader, Spinner, StatusChip } from '../components/ui'
@@ -14,10 +14,28 @@ export default function Parts() {
   const [search, setSearch] = useState(params.get('q') ?? '')
   const [picked, setPicked] = useState<number[]>([])
 
-  const query = params.toString()
+  // The default view is what you still have. Sold and scrapped are finished
+  // business and sit behind an explicit choice, the same way voided sales do.
+  // Done here rather than in the API because a car's page and the sale picker
+  // both need the full picture.
+  const status = params.get('status') ?? ''
+  const query = useMemo(() => {
+    const next = new URLSearchParams(params)
+    next.delete('status')
+    if (status === 'all') {
+      // Everything, sold and scrapped included.
+    } else if (status) {
+      next.set('status', status)
+    } else {
+      next.set('in_stock', 'true')
+    }
+    if (!next.has('limit')) next.set('limit', '50')
+    return next.toString()
+  }, [params, status])
+
   const parts = useQuery({
     queryKey: ['parts', query],
-    queryFn: () => api.get<Page<Part>>(`/parts?${query || 'limit=50'}`),
+    queryFn: () => api.get<Page<Part>>(`/parts?${query}`),
   })
 
   const vehicles = useQuery({
@@ -45,7 +63,11 @@ export default function Parts() {
     <>
       <PageHeader
         title="Parts"
-        subtitle={parts.data ? `${parts.data.total} in the catalogue` : undefined}
+        subtitle={
+          parts.data
+            ? `${parts.data.total} ${status === '' ? 'in stock' : 'matching'}`
+            : undefined
+        }
         actions={
           <>
             <button
@@ -84,10 +106,11 @@ export default function Parts() {
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
           <select
             className="field"
-            value={params.get('status') ?? ''}
+            value={status}
             onChange={(e) => setParam('status', e.target.value)}
           >
-            <option value="">Any status</option>
+            <option value="">In stock</option>
+            <option value="all">Everything, sold included</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s[0].toUpperCase() + s.slice(1)}

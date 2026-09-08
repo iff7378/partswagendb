@@ -130,6 +130,9 @@ def list_parts(
     sellable: bool = Query(
         default=False, description="Only parts that could go on a sale: draft, available, reserved"
     ),
+    in_stock: bool = Query(
+        default=False, description="Only stock still on hand: not sold, not scrapped"
+    ),
     sort: str = Query(default="newest", pattern="^(newest|oldest|price|title)$"),
     limit: int = Query(default=50, le=200),
     offset: int = 0,
@@ -160,6 +163,11 @@ def list_parts(
             Part.status.in_([PartStatus.DRAFT, PartStatus.AVAILABLE, PartStatus.RESERVED]),
             ~Part.sale_items.any(SaleItem.sale.has(Sale.voided_at.is_(None))),
         )
+    if in_stock:
+        # What is still on the shelf. Deliberately not the API default: a car's
+        # page wants the parts that came off it whether or not they have sold,
+        # and so does the picker when editing a sale.
+        query = query.where(Part.status.notin_([PartStatus.SOLD, PartStatus.SCRAPPED]))
     if condition:
         query = query.where(Part.condition == condition)
     if vehicle_id is not None:
