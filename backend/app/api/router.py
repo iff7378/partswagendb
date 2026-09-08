@@ -10,6 +10,7 @@ from app.api import (
     reports,
     sales,
     settlements,
+    tasks,
     users,
     vehicles,
 )
@@ -26,4 +27,5 @@ api_router.include_router(photos.router)
 api_router.include_router(sales.router)
 api_router.include_router(settlements.router)
 api_router.include_router(labels.router)
+api_router.include_router(tasks.router)
 api_router.include_router(reports.router)

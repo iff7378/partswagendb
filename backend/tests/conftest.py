@@ -3,7 +3,7 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -26,6 +26,16 @@ def db() -> Generator[Session, None, None]:
     engine = create_engine(
         TEST_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
+
+    # SQLite ignores foreign keys unless asked, so without this no ON DELETE
+    # rule and no CHECK on a foreign key is exercised at all -- the tests would
+    # pass while Postgres behaved differently in production.
+    @event.listens_for(engine, "connect")
+    def _enforce_foreign_keys(connection, _record):  # type: ignore[no-untyped-def]
+        cursor = connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, autoflush=False, future=True)
     session = factory()
@@ -33,7 +43,10 @@ def db() -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(engine)
+        # Disposing throws the whole in-memory database away. Dropping tables
+        # individually cannot be ordered around the self-referential foreign
+        # key on locations once foreign keys are actually being enforced.
+        engine.dispose()
 
 
 @pytest.fixture

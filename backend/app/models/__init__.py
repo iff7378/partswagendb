@@ -5,6 +5,7 @@ from app.models.part import Part, PartListing
 from app.models.photo import Photo
 from app.models.sale import Sale, SaleItem
 from app.models.settlement import Settlement
+from app.models.task import Task
 from app.models.user import User
 from app.models.vehicle import Vehicle, VehicleExpense
 
@@ -19,6 +20,7 @@ __all__ = [
     "SaleItem",
     "Settlement",
     "Tag",
+    "Task",
     "User",
     "Vehicle",
     "VehicleExpense",
