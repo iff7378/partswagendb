@@ -236,6 +236,12 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           record of the car.
         </P>
         <P>
+          <strong>Cards</strong> or <strong>Table</strong> switches the layout. The table drops
+          the photos and fits far more on a screen, which is what you want when scanning stock
+          or checking prices; cards are better when you are looking for something by sight.
+          Whichever you used last is what you get next time.
+        </P>
+        <P>
           <strong>Missing</strong> narrows to one gap at a time — no photos, no part number, not
           on a shelf, no price. It is deliberately one thing rather than
           &ldquo;incomplete&rdquo;, because almost nothing is ever fully filled in and a filter
