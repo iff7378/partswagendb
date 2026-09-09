@@ -103,6 +103,25 @@ export default function PartDetailPage() {
               {/* Only for stock that could still be sold: anything already on
                   a sale is handled by editing that sale, not by starting
                   another one that would be rejected. */}
+              {/* Straight on the header: moving a part from draft to available
+                  is the commonest edit there is, and going through the edit
+                  form for one dropdown was three clicks too many. */}
+              <select
+                className="field !w-auto"
+                value={p.status}
+                onChange={(e) => update.mutate({ status: e.target.value })}
+                disabled={update.isPending}
+                aria-label="Status"
+              >
+                {Object.entries(STATUS_LABELS)
+                  // Sold is what being on a sale means, not a label to apply.
+                  .filter(([value]) => value !== 'sold' || p.status === 'sold')
+                  .map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+              </select>
               {['draft', 'available', 'reserved'].includes(p.status) && (
                 <Link to={`/sales?parts=${p.id}`} className="btn-primary">
                   Sell this

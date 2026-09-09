@@ -9,6 +9,7 @@ export type ListingChannel = 'facebook' | 'ebay' | 'craigslist' | 'offerup' | 'o
 export type SaleChannel = 'ebay' | 'facebook' | 'local' | 'phone' | 'scrap' | 'other'
 export type ExpenseCategory =
   | 'purchase'
+  | 'shipping'
   | 'transport'
   | 'tooling'
   | 'disposal'
@@ -245,13 +246,26 @@ export interface Sale {
   created_at: string
 }
 
+export interface SaleCost {
+  id: number
+  description: string
+  category: ExpenseCategory
+  amount: string
+  incurred_on: string
+  paid_by: UserBrief
+}
+
 export interface SaleDetail extends Sale {
   items: SaleItem[]
+  costs: SaleCost[]
+  /** Collected less what was spent getting it there. */
+  net_after_costs: string
 }
 
 export interface Expense {
   id: number
   vehicle_id: number | null
+  sale_id: number | null
   description: string
   category: ExpenseCategory
   amount: string

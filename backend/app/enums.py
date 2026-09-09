@@ -52,6 +52,9 @@ class ExpenseCategory(StrEnum):
     DISPOSAL = "disposal"
     STORAGE = "storage"
     FEES = "fees"
+    # What it cost to get a part to a buyer, as opposed to what the buyer was
+    # charged for shipping, which is revenue on the sale.
+    SHIPPING = "shipping"
     # Overheads that belong to the venture rather than to any one car.
     SUPPLIES = "supplies"
     MEALS = "meals"

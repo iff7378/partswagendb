@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.enums import ExpenseCategory, VehicleStatus
 from app.schemas.common import ORMModel
@@ -107,10 +107,20 @@ class ExpenseBase(BaseModel):
 
 class ExpenseCreate(ExpenseBase):
     vehicle_id: int | None = None
+    # A cost belongs to a car, to a sale, or to neither. Never to both: it
+    # would then be counted twice over when either is totalled.
+    sale_id: int | None = None
+
+    @model_validator(mode="after")
+    def _single_anchor(self) -> "ExpenseCreate":
+        if self.vehicle_id is not None and self.sale_id is not None:
+            raise ValueError("A cost belongs to a car or a sale, not both")
+        return self
 
 
 class ExpenseUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1, max_length=255)
+    sale_id: int | None = None
     category: ExpenseCategory | None = None
     amount: Decimal | None = Field(default=None, gt=0, decimal_places=2)
     incurred_on: date | None = None
@@ -122,6 +132,7 @@ class ExpenseUpdate(BaseModel):
 class ExpenseRead(ExpenseBase, ORMModel):
     id: int
     vehicle_id: int | None = None
+    sale_id: int | None = None
     paid_by: UserBrief
     created_at: datetime
 

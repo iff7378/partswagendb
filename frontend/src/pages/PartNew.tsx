@@ -41,6 +41,9 @@ export default function PartNew() {
   const [ageAlert, setAgeAlert] = useState(
     () => localStorage.getItem(STICKY_AGE_ALERT) ?? DEFAULT_AGE_ALERT_DAYS,
   )
+  // Null means "work it out from what is filled in", which is the old
+  // behaviour. Touching the control pins it either way.
+  const [readyOverride, setReadyOverride] = useState<boolean | null>(null)
   const [files, setFiles] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
   const [justSaved, setJustSaved] = useState<Saved | null>(null)
@@ -87,8 +90,7 @@ export default function PartNew() {
         part_number: partNumber.trim() || null,
         notes: notes.trim() || null,
         age_alert_days: ageAlert ? Number(ageAlert) : null,
-        // Anything with a price and a home is ready to sell; the rest stays a draft.
-        status: price && locationId && categoryId ? 'available' : 'draft',
+        status: ready ? 'available' : 'draft',
       })
 
       for (const file of files) {
@@ -119,6 +121,10 @@ export default function PartNew() {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     },
   })
+
+  // Anything with a price and a home is ready to sell unless told otherwise.
+  const complete = Boolean(price && locationId && categoryId)
+  const ready = readyOverride ?? complete
 
   function onSubmit(event: FormEvent) {
     event.preventDefault()
@@ -304,6 +310,24 @@ export default function PartNew() {
               />
             </Field>
           </div>
+
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rust focus:ring-rust"
+              checked={ready}
+              onChange={(e) => setReadyOverride(e.target.checked)}
+            />
+            <span>
+              Ready to sell
+              <span className="block text-xs text-ink-soft">
+                {ready
+                  ? 'Goes straight into stock, so it shows up when recording a sale.'
+                  : 'Saves as a draft. Still on the shelf and still sellable, just not finished.'}
+                {readyOverride === null && complete && ' Ticked because it has a price, a shelf and a category.'}
+              </span>
+            </span>
+          </label>
 
           <Field
             label="Flag it if unsold after"

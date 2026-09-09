@@ -97,8 +97,23 @@ class SaleRead(SaleBase, ORMModel):
     created_at: datetime
 
 
+class SaleCost(ORMModel):
+    """What this sale cost, and which partner actually paid it."""
+
+    id: int
+    description: str
+    category: str
+    amount: Decimal
+    incurred_on: date
+    paid_by: UserBrief
+
+
 class SaleDetail(SaleRead):
     items: list[SaleItemRead] = Field(default_factory=list)
+    costs: list[SaleCost] = Field(default_factory=list)
+    # What the venture actually kept: collected less what was spent getting it
+    # there. Not the same as net_collected, which is one person's takings.
+    net_after_costs: Decimal = Decimal("0")
 
 
 class SiteBrief(BaseModel):

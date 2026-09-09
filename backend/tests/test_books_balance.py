@@ -300,3 +300,146 @@ def test_suggestions_offer_what_was_typed_before(client: TestClient, auth_header
     assert filtered == ["Alternator"]
 
     assert client.get("/api/suggestions/nonsense", headers=auth_headers).status_code == 404
+
+
+def test_one_partner_collects_while_the_other_pays_to_ship(
+    client: TestClient, auth_headers, admin, make_user
+) -> None:
+    """The case that used to go wrong.
+
+    Ian coordinates a tail light for 130 all in and takes the money. Kevin
+    packs it and buys a 12 label out of his own pocket. Before costs could
+    attach to a sale, Ian looked like he had taken the full 130, Kevin's 12 was
+    nowhere, and the venture looked 12 better off than it was.
+    """
+    from app.enums import UserRole
+
+    kevin = make_user("kevin@example.com", role=UserRole.STAFF, is_partner=True, share_bps=5000)
+    # The admin fixture is the other partner.
+    client.patch(
+        f"/api/users/{admin.id}",
+        headers=auth_headers,
+        json={"is_partner": True, "share_bps": 5000},
+    )
+
+    part = client.post(
+        "/api/parts",
+        headers=auth_headers,
+        json={"title": "Tail light", "status": "available"},
+    ).json()
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-08",
+            "paid_on": "2026-09-08",
+            "fulfilled_on": "2026-09-08",
+            "collected_by_id": admin.id,
+            "shipping": "15.00",
+            "items": [{"part_ids": [part["id"]], "unit_price": "115.00"}],
+        },
+    ).json()
+    assert D(sale["net_collected"]) == D("130.00")
+
+    cost = client.post(
+        "/api/expenses",
+        headers=auth_headers,
+        json={
+            "sale_id": sale["id"],
+            "description": "Shipping label",
+            "category": "shipping",
+            "amount": "12.00",
+            "incurred_on": "2026-09-08",
+            "paid_by_id": kevin.id,
+        },
+    )
+    assert cost.status_code == 201, cost.text
+
+    detail = client.get(f"/api/sales/{sale['id']}", headers=auth_headers).json()
+    assert len(detail["costs"]) == 1
+    assert detail["costs"][0]["paid_by"]["id"] == kevin.id
+    # Collected is still what Ian took; the margin is what the venture kept.
+    assert D(detail["net_collected"]) == D("130.00")
+    assert D(detail["net_after_costs"]) == D("118.00")
+
+    report = client.get(f"/api/settle-up?{PERIOD}", headers=auth_headers).json()
+    assert D(report["total_revenue"]) == D("130.00")
+    assert D(report["total_expenses"]) == D("12.00")
+    assert D(report["profit"]) == D("118.00")
+
+    balances = {b["user"]["id"]: b for b in report["balances"]}
+    # Ian is holding 130 and is owed nothing for outlay.
+    assert D(balances[admin.id]["revenue_collected"]) == D("130.00")
+    assert D(balances[admin.id]["expenses_paid"]) == D("0.00")
+    # Kevin collected nothing and is 12 down.
+    assert D(balances[kevin.id]["revenue_collected"]) == D("0.00")
+    assert D(balances[kevin.id]["expenses_paid"]) == D("12.00")
+
+    # Each is entitled to half of 118, so Ian owes Kevin his 12 back plus
+    # Kevin's share of the profit: 130 - 59 = 71.
+    assert D(balances[admin.id]["entitled"]) == D("59.00")
+    assert D(balances[kevin.id]["entitled"]) == D("59.00")
+    transfer = report["transfers"][0]
+    assert transfer["from_user"]["id"] == admin.id
+    assert transfer["to_user"]["id"] == kevin.id
+    assert D(transfer["amount"]) == D("71.00")
+
+
+def test_a_cost_belongs_to_a_car_or_a_sale_but_not_both(
+    client: TestClient, auth_headers, admin
+) -> None:
+    car = client.post("/api/vehicles", headers=auth_headers, json={"decode_vin": False}).json()
+    part = client.post(
+        "/api/parts", headers=auth_headers, json={"title": "Bit", "status": "available"}
+    ).json()
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-08",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "10.00"}],
+        },
+    ).json()
+
+    response = client.post(
+        "/api/expenses",
+        headers=auth_headers,
+        json={
+            "vehicle_id": car["id"],
+            "sale_id": sale["id"],
+            "description": "Confused",
+            "amount": "5.00",
+            "incurred_on": "2026-09-08",
+            "paid_by_id": admin.id,
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_a_sale_cost_stays_out_of_any_cars_profit(client: TestClient, auth_headers, admin) -> None:
+    state = _lifecycle(client, auth_headers, admin)
+    car_id = state["car"]["id"]
+    before = client.get(f"/api/vehicles/{car_id}", headers=auth_headers).json()
+
+    sale = client.get("/api/sales?limit=1", headers=auth_headers).json()["items"][0]
+    client.post(
+        "/api/expenses",
+        headers=auth_headers,
+        json={
+            "sale_id": sale["id"],
+            "description": "Packing materials",
+            "category": "supplies",
+            "amount": "8.00",
+            "incurred_on": "2026-09-08",
+            "paid_by_id": admin.id,
+        },
+    )
+
+    after = client.get(f"/api/vehicles/{car_id}", headers=auth_headers).json()
+    # A sale can cover parts from several cars, so pinning its costs to one
+    # would be a guess. It counts as a venture cost instead.
+    assert after["total_expenses"] == before["total_expenses"]
+
+    report = client.get("/api/reports/by-vehicle", headers=auth_headers).json()
+    assert D(report["general_expenses"]) == D("48.00")  # 40 overheads + 8 packing

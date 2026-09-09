@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -6,9 +7,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import CurrentUser, DbSession, RequireEditor
 from app.enums import PartStatus, SaleState, VehicleStatus
-from app.models import Location, Part, Sale, SaleItem, User, Vehicle
+from app.models import Location, Part, Sale, SaleItem, User, Vehicle, VehicleExpense
 from app.schemas.common import Page
 from app.schemas.sale import (
+    SaleCost,
     SaleCreate,
     SaleDetail,
     SaleItemCreate,
@@ -56,10 +58,21 @@ def _get_or_404(db: Session, sale_id: int) -> Sale:
     return sale
 
 
-def _to_detail(sale: Sale) -> SaleDetail:
+def _to_detail(db: Session, sale: Sale) -> SaleDetail:
     detail = SaleDetail.model_validate(sale)
     for item, source in zip(detail.items, sale.items, strict=True):
         item.vehicle_name = source.vehicle.display_name if source.vehicle else None
+
+    costs = list(
+        db.execute(
+            select(VehicleExpense)
+            .options(selectinload(VehicleExpense.paid_by))
+            .where(VehicleExpense.sale_id == sale.id)
+            .order_by(VehicleExpense.incurred_on, VehicleExpense.id)
+        ).scalars()
+    )
+    detail.costs = [SaleCost.model_validate(cost) for cost in costs]
+    detail.net_after_costs = sale.net_collected - sum((cost.amount for cost in costs), Decimal("0"))
     return detail
 
 
@@ -246,7 +259,7 @@ def create_sale(db: DbSession, user: RequireEditor, payload: SaleCreate) -> Sale
     _apply_state(sale)
     db.add(sale)
     db.commit()
-    return _to_detail(_get_or_404(db, sale.id))
+    return _to_detail(db, _get_or_404(db, sale.id))
 
 
 @router.get("/schedule", response_model=Schedule)
@@ -288,7 +301,7 @@ def schedule(db: DbSession, _: CurrentUser, site_id: int | None = None) -> Sched
 
 @router.get("/{sale_id}", response_model=SaleDetail)
 def get_sale(db: DbSession, _: CurrentUser, sale_id: int) -> SaleDetail:
-    return _to_detail(_get_or_404(db, sale_id))
+    return _to_detail(db, _get_or_404(db, sale_id))
 
 
 @router.patch("/{sale_id}", response_model=SaleDetail)
@@ -328,7 +341,7 @@ def update_sale(db: DbSession, _: RequireEditor, sale_id: int, payload: SaleUpda
     # what turns a reservation into a sale, and un-marking it reverses that.
     _apply_state(sale)
     db.commit()
-    return _to_detail(_get_or_404(db, sale_id))
+    return _to_detail(db, _get_or_404(db, sale_id))
 
 
 @router.delete("/{sale_id}", response_model=SaleDetail)
@@ -356,7 +369,7 @@ def void_sale(
     sale.voided_by_id = user.id
     sale.void_reason = reason
     db.commit()
-    return _to_detail(_get_or_404(db, sale_id))
+    return _to_detail(db, _get_or_404(db, sale_id))
 
 
 def _site_of(location: Location | None, by_id: dict[int, Location]) -> Location | None:

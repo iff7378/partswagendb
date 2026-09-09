@@ -106,6 +106,7 @@ export function humanAge(days: number): string {
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   purchase: 'Buying a car',
+  shipping: 'Shipping it out',
   transport: 'Towing and transport',
   tooling: 'Tools',
   disposal: 'Disposal',

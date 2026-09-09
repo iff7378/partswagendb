@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.deps import CurrentUser, DbSession, RequireEditor
-from app.models import Settlement, User, VehicleExpense
+from app.models import Sale, Settlement, User, VehicleExpense
 from app.schemas.common import Message
 from app.schemas.settlement import SettlementCreate, SettlementRead, SettleUpReport
 from app.schemas.vehicle import ExpenseCreate, ExpenseRead, ExpenseUpdate
@@ -27,18 +27,23 @@ def list_expenses(
     db: DbSession,
     _: CurrentUser,
     vehicle_id: int | None = None,
+    sale_id: int | None = None,
     paid_by_id: int | None = None,
     general: bool = Query(
         default=False, description="Only overheads that belong to no particular car"
     ),
 ) -> list[VehicleExpense]:
-    query = select(VehicleExpense).options(selectinload(VehicleExpense.paid_by))
+    query = select(VehicleExpense).options(
+        selectinload(VehicleExpense.paid_by), selectinload(VehicleExpense.sale)
+    )
     if general:
-        # Food, supplies, tooling: real money on the ledger, but not part of
+        # Food, supplies, shipping: real money on the ledger, but not part of
         # any one car's cost basis.
         query = query.where(VehicleExpense.vehicle_id.is_(None))
     elif vehicle_id is not None:
         query = query.where(VehicleExpense.vehicle_id == vehicle_id)
+    if sale_id is not None:
+        query = query.where(VehicleExpense.sale_id == sale_id)
     if paid_by_id is not None:
         query = query.where(VehicleExpense.paid_by_id == paid_by_id)
     return list(db.execute(query.order_by(VehicleExpense.incurred_on.desc())).scalars())
@@ -50,6 +55,8 @@ def create_expense(db: DbSession, user: RequireEditor, payload: ExpenseCreate) -
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Paying user does not exist"
         )
+    if payload.sale_id is not None and db.get(Sale, payload.sale_id) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sale does not exist")
 
     expense = VehicleExpense(**payload.model_dump(), created_by_id=user.id)
     db.add(expense)

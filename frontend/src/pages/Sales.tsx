@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
 
 import History from '../components/History'
+import SaleCosts from '../components/SaleCosts'
 import SaleLines from '../components/SaleLines'
 import TaskPanel from '../components/TaskList'
 import SuggestInput from '../components/SuggestInput'
@@ -425,7 +426,8 @@ function SaleRow({
   // Marking paid or collected is a patch like any other, but it moves stock
   // and the ledger, so it refreshes everything a sale can touch.
   const advance = useMutation({
-    mutationFn: (patch: Record<string, string>) => api.patch(`/sales/${sale.id}`, patch),
+    mutationFn: (patch: Record<string, string | null>) =>
+      api.patch(`/sales/${sale.id}`, patch),
     onSuccess: refresh,
   })
 
@@ -525,10 +527,18 @@ function SaleRow({
                   <Line label="Fees" value={`-${detail.data.fees}`} />
                 )}
                 <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold">
-                  <dt>Collected</dt>
+                  <dt>Collected by {detail.data.collected_by.full_name}</dt>
                   <dd className="tabular-nums">{money(detail.data.net_collected)}</dd>
                 </div>
               </dl>
+
+              <SaleCosts
+                saleId={sale.id}
+                costs={detail.data.costs}
+                netCollected={detail.data.net_collected}
+                netAfterCosts={detail.data.net_after_costs}
+                onChange={refresh}
+              />
 
               {detail.data.voided_at && (
                 <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-ink-soft">
@@ -565,6 +575,37 @@ function SaleRow({
                       }
                     >
                       Mark collected
+                    </button>
+                  )}
+                  {/* Undo, because ticking the wrong box is easy and there
+                      was previously no way back from it. */}
+                  {detail.data.paid_on && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={advance.isPending}
+                      onClick={() => advance.mutate({ paid_on: null })}
+                    >
+                      Not paid after all
+                    </button>
+                  )}
+                  {detail.data.fulfilled_on && (
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={advance.isPending}
+                      onClick={() => {
+                        if (
+                          confirm(
+                            'Mark this as not collected? Its parts go back to being ' +
+                              'reserved for this buyer, and a scrapped shell goes back to stripped.',
+                          )
+                        ) {
+                          advance.mutate({ fulfilled_on: null })
+                        }
+                      }}
+                    >
+                      Not collected after all
                     </button>
                   )}
                   <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>

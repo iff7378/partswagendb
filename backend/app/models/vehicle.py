@@ -2,7 +2,16 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, Date, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -11,7 +20,7 @@ from app.models.base import JsonColumn, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.part import Part
-    from app.models.sale import SaleItem
+    from app.models.sale import Sale, SaleItem
     from app.models.user import User
 
 
@@ -77,15 +86,35 @@ class Vehicle(Base, TimestampMixin):
 
 
 class VehicleExpense(Base, TimestampMixin):
-    """Money spent on a vehicle, tracked against whoever actually paid it."""
+    """Money spent, tracked against whoever actually paid it.
+
+    Attaches to a car, to a sale, or to neither. A sale is the case that
+    matters most: one partner can collect the money for a sale while the other
+    pays to ship it, and without somewhere to put that cost the collector looks
+    like they took the whole amount and the shipper is quietly out of pocket.
+    """
 
     __tablename__ = "vehicle_expenses"
+    __table_args__ = (
+        # At most one anchor, so a cost cannot be counted against a car and a
+        # sale at the same time.
+        CheckConstraint(
+            "(CASE WHEN vehicle_id IS NOT NULL THEN 1 ELSE 0 END"
+            " + CASE WHEN sale_id IS NOT NULL THEN 1 ELSE 0 END) <= 1",
+            name="ck_vehicle_expenses_single_anchor",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     vehicle_id: Mapped[int | None] = mapped_column(
         ForeignKey("vehicles.id", ondelete="CASCADE"), index=True
     )
     vehicle: Mapped["Vehicle | None"] = relationship(back_populates="expenses")
+
+    sale_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sales.id", ondelete="CASCADE"), index=True
+    )
+    sale: Mapped["Sale | None"] = relationship()
 
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[ExpenseCategory] = mapped_column(

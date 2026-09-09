@@ -44,6 +44,8 @@ function sale(partial: Partial<SaleDetail> = {}): SaleDetail {
     notes: null,
     created_at: '2026-09-01T00:00:00Z',
     items: [line()],
+    costs: [],
+    net_after_costs: '10.00',
     ...partial,
   }
 }

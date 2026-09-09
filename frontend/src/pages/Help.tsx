@@ -179,6 +179,12 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           photos takes about a minute to work through.
         </P>
         <P>
+          <strong>Ready to sell</strong> on the entry form decides whether it goes straight into
+          stock. It ticks itself once a part has a price, a shelf and a category, but you can
+          tick it yourself at any point. A part&rsquo;s status can also be changed straight from
+          its own page &mdash; no need to open the edit form for one dropdown.
+        </P>
+        <P>
           A part with a price, a shelf and a category is <strong>Available</strong>. Anything
           missing one of those is a <strong>Draft</strong> — still a real part on a real shelf,
           still sellable, just not finished. Drafts are normal and you do not have to clear them.
@@ -308,6 +314,22 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           <em>is</em> — doing it by hand used to take parts out of stock with no money and no
           collector attached, which quietly lost income. Record the sale instead.
         </Note>
+        <P>
+          <strong>What it cost us</strong> on each sale is where postage, packing and fees go,
+          against whoever actually paid them. This matters when one of you collects the money
+          and the other buys the label: without it the collector looks like they took the whole
+          amount and the other is quietly out of pocket.
+        </P>
+        <Note>
+          Fronting a cost and bearing it are different things. If Kevin pays $12 to ship a $130
+          sale Ian collected, the settle-up hands Kevin back his $12 <em>and</em> his half of
+          the profit &mdash; so the $12 ends up shared, $6 each, which is what a 50/50
+          partnership means.
+        </Note>
+        <P>
+          Ticked the wrong box? <em>Not paid after all</em> and <em>Not collected after all</em>
+          put a sale back. Un-collecting returns its parts to being reserved for that buyer.
+        </P>
         <P>
           Got a sale wrong? Expand it and hit <em>Edit</em>. You can change the lines: parts you
           take off go back into stock, parts you add come out. Voiding is only for a sale that
