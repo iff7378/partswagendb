@@ -127,9 +127,14 @@ function VersionFooter() {
         How this works
       </NavLink>
       <span className="mx-2">·</span>
-      <NavLink to="/whats-new" className="hover:underline" title="What changed recently">
-        PartsWagen {data?.version ?? '…'}
+      {/* Named, not just a clickable version number. The version alone carried
+          no colour and no underline, so it read as plain text and nobody would
+          ever have thought to click it. */}
+      <NavLink to="/whats-new" className="font-medium text-rust hover:underline">
+        What&rsquo;s new
       </NavLink>
+      <span className="mx-2">·</span>
+      PartsWagen {data?.version ?? '…'}
     </p>
   )
 }

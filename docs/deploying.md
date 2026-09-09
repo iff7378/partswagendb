@@ -21,8 +21,8 @@ You never build images yourself. GitHub Actions builds them on every push to
 
 Add an entry to `frontend/src/lib/changelog.ts` for anything someone would
 notice — a new screen, a changed default, a fix to something that was wrong.
-Not every commit. It shows up in the app under **What's new**, reached by
-clicking the version at the bottom of any page.
+Not every commit. It shows up in the app under **What's new**, linked at the bottom of
+every page.
 
 Write it for whoever uses the app, not whoever wrote it. "You can sell a whole
 interior on one line" beats "sale lines accept multiple parts".

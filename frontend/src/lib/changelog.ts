@@ -41,7 +41,11 @@ export const RELEASES: Release[] = [
     changes: [
       {
         kind: 'new',
-        text: 'This page. Click the version at the bottom of any screen to see what changed and when. The entry matching what is running marks itself, so it also answers whether a deploy landed.',
+        text: 'This page, linked at the bottom of every screen, showing what changed and when. The entry matching what is running marks itself, so it also answers whether a deploy landed.',
+      },
+      {
+        kind: 'fixed',
+        text: 'The app could keep running old code after a deploy. The page that names everything else was allowed to sit in the browser cache, and because the version on screen comes from the server rather than the code, it looked updated while it was not. One hard refresh clears it; it will not happen again.',
       },
       {
         kind: 'fixed',
