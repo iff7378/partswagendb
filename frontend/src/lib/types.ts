@@ -439,3 +439,26 @@ export interface AuditEntry {
   label: string | null
   changes: Record<string, unknown> | null
 }
+
+export interface TaskAnchor {
+  kind: 'part' | 'sale' | 'vehicle'
+  id: number
+  label: string
+}
+
+export interface Task {
+  id: number
+  title: string
+  notes: string | null
+  assigned_to: UserBrief | null
+  assigned_to_id: number | null
+  due_on: string | null
+  done_at: string | null
+  done_by: UserBrief | null
+  is_done: boolean
+  is_overdue: boolean
+  /** The part, sale or car this is about, or null for a standalone job. */
+  anchor: TaskAnchor | null
+  created_by: UserBrief | null
+  created_at: string
+}

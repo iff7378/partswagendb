@@ -390,6 +390,52 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'tasks',
+    title: 'Keeping track of what needs doing',
+    body: (
+      <>
+        <P>
+          The tick-box in the top bar opens <strong>To do</strong>. Anything can be raised there,
+          or from the panel on a part, sale or car &mdash; which is usually better, because the
+          task then carries the thing it is about and you can tap straight through to it.
+        </P>
+        <P>
+          A task can be left as <strong>Anyone</strong>. That is the default on purpose: most
+          jobs here are &ldquo;whoever gets to it&rdquo;, and having to pick a name before you
+          can write something down is friction you do not need. Either of you can then hit{' '}
+          <em>I&rsquo;ll do it</em> to claim it, or <em>Hand back</em> to put it down again.
+        </P>
+        <Bullets
+          items={[
+            <>
+              <strong>Mine and unclaimed</strong> is the default view: your work plus anything
+              going spare.
+            </>,
+            <>
+              <strong>Overdue</strong> is anything dated before today that is still open. It
+              sits at the top in red.
+            </>,
+            <>
+              Dated jobs also appear on the{' '}
+              <Link className="text-rust underline" to="/sales/schedule">
+                pickup schedule
+              </Link>{' '}
+              under the day they are due, so one page tells you what the day holds.
+            </>,
+          ]}
+        />
+        <Note>
+          Tasks carry a date, not a time. A job due Thursday sits under Thursday alongside a
+          Thursday collection, but cannot be ordered against the five o&rsquo;clock itself.
+        </Note>
+        <P>
+          Ticking a task off keeps it &mdash; it moves to <em>Finished</em> with your name on
+          it. The × deletes one raised by mistake, which is a different thing.
+        </P>
+      </>
+    ),
+  },
+  {
     id: 'money',
     title: 'Money and settling up',
     body: (

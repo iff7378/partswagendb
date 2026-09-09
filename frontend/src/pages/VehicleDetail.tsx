@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import History from '../components/History'
 import SuggestInput from '../components/SuggestInput'
+import TaskPanel from '../components/TaskList'
 import { ErrorNote, Field, PageHeader, Spinner, Stat, StatusChip } from '../components/ui'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -304,6 +305,8 @@ export default function VehicleDetailPage() {
           ))}
         </div>
       </div>
+
+      <TaskPanel anchor={{ vehicle_id: v.id }} query={`vehicle_id=${v.id}`} />
 
       <History entity="Vehicle" entityId={v.id} />
 

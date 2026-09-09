@@ -5,6 +5,7 @@ import type { FormEvent } from 'react'
 
 import History from '../components/History'
 import SaleLines from '../components/SaleLines'
+import TaskPanel from '../components/TaskList'
 import SuggestInput from '../components/SuggestInput'
 import SalesTabs from '../components/SalesTabs'
 import { EMPTY_LINE, subtotalOf, toPayload, voidWarning } from '../lib/saleLines'
@@ -589,7 +590,12 @@ function SaleRow({
             </>
           )}
 
-          {detail.data && !editing && <History entity="Sale" entityId={sale.id} />}
+          {detail.data && !editing && (
+            <>
+              <TaskPanel anchor={{ sale_id: sale.id }} query={`sale_id=${sale.id}`} />
+              <History entity="Sale" entityId={sale.id} />
+            </>
+          )}
 
           {detail.data && editing && (
             <EditSale

@@ -14,6 +14,7 @@ import Parts from './pages/Parts'
 import Sales from './pages/Sales'
 import SaleSchedule from './pages/SaleSchedule'
 import Help from './pages/Help'
+import Tasks from './pages/Tasks'
 import Settings from './pages/Settings'
 import Locations from './pages/Locations'
 import VehicleDetailPage from './pages/VehicleDetail'
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/sales/schedule" element={<SaleSchedule />} />
         <Route path="/money" element={<Money />} />
         <Route path="/money/ledger" element={<MoneyLedger />} />
+        <Route path="/tasks" element={<Tasks />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/help" element={<Help />} />
         <Route

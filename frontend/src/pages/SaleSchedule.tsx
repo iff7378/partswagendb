@@ -1,9 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import SalesTabs from '../components/SalesTabs'
 import { EmptyState, ErrorNote, PageHeader, Spinner } from '../components/ui'
+import { TaskRow } from '../components/TaskList'
+import { refreshTasks } from '../lib/tasks'
 import { api } from '../lib/api'
 import {
   SALE_STATE_LABELS,
@@ -12,7 +14,7 @@ import {
   money,
   timeOfDay,
 } from '../lib/format'
-import type { Schedule, ScheduleEntry } from '../lib/types'
+import type { Schedule, ScheduleEntry, Task } from '../lib/types'
 
 /** Group the diary by calendar day, keeping the order the API sent. */
 function byDay(entries: ScheduleEntry[]): [string, ScheduleEntry[]][] {
@@ -26,6 +28,16 @@ function byDay(entries: ScheduleEntry[]): [string, ScheduleEntry[]][] {
 
 export default function SaleSchedule() {
   const [siteId, setSiteId] = useState('')
+  const queryClient = useQueryClient()
+
+  // Tasks share the diary. A job due Thursday and a collection Thursday are
+  // the same day's work; keeping them on separate pages means checking two.
+  // They carry a date rather than a time, so they sit above the timed pickups
+  // for their day rather than being interleaved with them.
+  const tasks = useQuery({
+    queryKey: ['tasks', 'dated'],
+    queryFn: () => api.get<Task[]>('/tasks'),
+  })
 
   const schedule = useQuery({
     queryKey: ['schedule', siteId],
@@ -109,18 +121,60 @@ export default function SaleSchedule() {
         </section>
       )}
 
-      {byDay(upcoming).map(([day, entries]) => (
-        <section key={day} className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-soft">
-            {dayLabel(entries[0].meetup_at!)}
-          </h2>
-          <div className="card divide-y divide-slate-100">
-            {entries.map((entry) => (
-              <Row key={entry.id} entry={entry} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {byDay(upcoming).map(([day, entries]) => {
+        const dayKey = new Date(entries[0].meetup_at!).toDateString()
+        const dayTasks = (tasks.data ?? []).filter(
+          (task) =>
+            task.due_on && new Date(`${task.due_on}T12:00:00`).toDateString() === dayKey,
+        )
+        return (
+          <section key={day} className="mb-6">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-soft">
+              {dayLabel(entries[0].meetup_at!)}
+            </h2>
+            {dayTasks.length > 0 && (
+              <ul className="card mb-2 divide-y divide-slate-100">
+                {dayTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    onChange={() => refreshTasks(queryClient)}
+                  />
+                ))}
+              </ul>
+            )}
+            <div className="card divide-y divide-slate-100">
+              {entries.map((entry) => (
+                <Row key={entry.id} entry={entry} />
+              ))}
+            </div>
+          </section>
+        )
+      })}
+
+      {(() => {
+        const pickupDays = new Set(
+          data.scheduled.map((e) => new Date(e.meetup_at!).toDateString()),
+        )
+        const orphans = (tasks.data ?? []).filter(
+          (task) =>
+            task.due_on &&
+            !pickupDays.has(new Date(`${task.due_on}T12:00:00`).toDateString()),
+        )
+        if (orphans.length === 0) return null
+        return (
+          <section className="mb-6">
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-soft">
+              Other jobs with a date
+            </h2>
+            <ul className="card divide-y divide-slate-100">
+              {orphans.map((task) => (
+                <TaskRow key={task.id} task={task} onChange={() => refreshTasks(queryClient)} />
+              ))}
+            </ul>
+          </section>
+        )
+      })()}
 
       {data.unscheduled.length > 0 && (
         <section className="mb-6">

@@ -1,12 +1,17 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 
+import { TaskRow } from '../components/TaskList'
+import { refreshTasks } from '../lib/tasks'
 import { ErrorNote, PageHeader, Spinner, Stat } from '../components/ui'
 import { api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { LISTING_CHANNEL_LABELS, dateTime, humanAge, money } from '../lib/format'
-import type { DashboardStats, Page, Part, Schedule, StaleListing } from '../lib/types'
+import type { DashboardStats, Page, Part, Schedule, StaleListing, Task } from '../lib/types'
 
 export default function Dashboard() {
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
   const stats = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => api.get<DashboardStats>('/dashboard'),
@@ -21,6 +26,13 @@ export default function Dashboard() {
   const schedule = useQuery({
     queryKey: ['schedule', ''],
     queryFn: () => api.get<Schedule>('/sales/schedule'),
+  })
+
+  // What this person could pick up right now: theirs plus the shared pile.
+  const tasks = useQuery({
+    queryKey: ['tasks', `mine_or_free=${user?.id ?? 0}`],
+    queryFn: () => api.get<Task[]>(`/tasks?mine_or_free=${user?.id ?? 0}`),
+    enabled: user !== null,
   })
 
   // Adverts still live for parts that have gone: the messages keep arriving.
@@ -67,6 +79,24 @@ export default function Dashboard() {
         <Stat label="Sold" value={s.parts_sold} />
         <Stat label="Donor cars" value={s.vehicles_total} />
       </div>
+
+      {(tasks.data?.length ?? 0) > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-end justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-ink-soft">
+              To do
+            </h2>
+            <Link to="/tasks" className="text-sm font-medium text-rust">
+              The whole list
+            </Link>
+          </div>
+          <ul className="card divide-y divide-slate-100">
+            {tasks.data?.slice(0, 5).map((task) => (
+              <TaskRow key={task.id} task={task} onChange={() => refreshTasks(queryClient)} />
+            ))}
+          </ul>
+        </div>
+      )}
 
       {(schedule.data?.scheduled.length ?? 0) > 0 && (
         <div className="mt-8">

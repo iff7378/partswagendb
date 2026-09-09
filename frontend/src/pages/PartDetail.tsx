@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import History from '../components/History'
 import Listings from '../components/Listings'
+import TaskPanel from '../components/TaskList'
 import QrScanner from '../components/QrScannerLazy'
 import { ErrorNote, Field, PageHeader, Spinner, StatusChip } from '../components/ui'
 import { api, download } from '../lib/api'
@@ -289,6 +290,8 @@ export default function PartDetailPage() {
           </section>
         </div>
       )}
+
+      <TaskPanel anchor={{ part_id: p.id }} query={`part_id=${p.id}`} />
 
       <Listings partId={p.id} listings={p.listings} />
 
