@@ -15,7 +15,14 @@ export interface Change {
 }
 
 export interface Release {
-  version: string
+  /**
+   * The day, not the build number.
+   *
+   * A release note has to be written before the release exists, and the build
+   * number is only worked out at build time -- so keying entries on it means
+   * every entry is guessing, and guesses wrong whenever a day needs a second
+   * deploy. What is running is shown once at the top of the page instead.
+   */
   on: string
   headline: string
   changes: Change[]
@@ -35,28 +42,8 @@ export const KIND_STYLES: Record<ChangeKind, string> = {
 
 export const RELEASES: Release[] = [
   {
-    version: '2026.09.09-3',
     on: '2026-09-09',
-    headline: 'This page, and version numbers that mean something',
-    changes: [
-      {
-        kind: 'new',
-        text: 'This page, linked at the bottom of every screen, showing what changed and when. The entry matching what is running marks itself, so it also answers whether a deploy landed.',
-      },
-      {
-        kind: 'fixed',
-        text: 'The app could keep running old code after a deploy. The page that names everything else was allowed to sit in the browser cache, and because the version on screen comes from the server rather than the code, it looked updated while it was not. One hard refresh clears it; it will not happen again.',
-      },
-      {
-        kind: 'fixed',
-        text: 'Two releases pushed close together could carry the same version number, so the number shown in the app did not reliably identify the code running. It is now worked out once and claimed before anything is built.',
-      },
-    ],
-  },
-  {
-    version: '2026.09.09-1',
-    on: '2026-09-09',
-    headline: 'A to-do list, and costs that belong to a sale',
+    headline: 'A to-do list, costs on a sale, and this page',
     changes: [
       {
         kind: 'new',
@@ -71,6 +58,10 @@ export const RELEASES: Release[] = [
         text: 'The parts page has a table view that drops the photos and fits far more on a screen. Whichever view you used last is what you get next time.',
       },
       {
+        kind: 'new',
+        text: 'This page, linked at the bottom of every screen.',
+      },
+      {
         kind: 'better',
         text: 'The parts page shows what you still have by default. Sold and scrapped parts sit behind "Everything, sold included", the same way voided sales do.',
       },
@@ -80,12 +71,19 @@ export const RELEASES: Release[] = [
       },
       {
         kind: 'fixed',
+        text: 'The app could keep running old code after a deploy. The page that names everything else was allowed to sit in the browser cache, and because the version on screen comes from the server rather than the code, it looked updated while it was not.',
+      },
+      {
+        kind: 'fixed',
         text: 'A sale wrongly marked paid or collected can be put back. There was previously no way to undo either.',
+      },
+      {
+        kind: 'fixed',
+        text: 'Two releases pushed close together could carry the same version number, so the number shown did not reliably identify what was running.',
       },
     ],
   },
   {
-    version: '2026.09.08',
     on: '2026-09-08',
     headline: 'Where a part is advertised',
     changes: [
@@ -100,7 +98,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.04-6',
     on: '2026-09-04',
     headline: 'A history of who changed what',
     changes: [
@@ -123,7 +120,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.04-5',
     on: '2026-09-04',
     headline: 'A shorter sale form, and selling straight from a part',
     changes: [
@@ -142,7 +138,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.04-4',
     on: '2026-09-04',
     headline: 'Type-ahead, and every line behind the summary',
     changes: [
@@ -161,7 +156,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.04-1',
     on: '2026-09-04',
     headline: 'Scrap sales, fixed',
     changes: [
@@ -176,7 +170,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.04',
     on: '2026-09-04',
     headline: 'Pickup times and a schedule',
     changes: [
@@ -191,7 +184,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.01-8',
     on: '2026-09-01',
     headline: 'Sales that are agreed but not finished',
     changes: [
@@ -206,7 +198,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.01-6',
     on: '2026-09-01',
     headline: 'Per-car profit, and a manual',
     changes: [
@@ -223,7 +214,6 @@ export const RELEASES: Release[] = [
     ],
   },
   {
-    version: '2026.09.01-2',
     on: '2026-09-01',
     headline: 'Lot sales, scrapping, and better part numbers',
     changes: [

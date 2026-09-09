@@ -27,15 +27,13 @@ every page.
 Write it for whoever uses the app, not whoever wrote it. "You can sell a whole
 interior on one line" beats "sale lines accept multiple parts".
 
-The version is claimed by the build before anything else runs: `2026.09.09` for
-the first release of a day, `-1` for the second, and so on. To see what the
-next one will be, count today's tags:
+Entries are keyed on the **day**, not the build number. Several deploys in one
+day belong under one heading — the build number is an implementation detail
+nobody using the app cares about, and it cannot be known before the build runs
+anyway. Add to today's entry if there is one; start a new one if there is not.
 
-```bash
-git fetch --tags --quiet && git tag -l "$(date -u +%Y.%m.%d)*" | wc -l
-```
-
-A count of 3 means the next release is `2026.09.09-3`. The entry marks itself **Running now** once that version is
+The page shows what is running at the top, so it also answers whether a deploy
+landed. The entry marks itself **Running now** once that version is
 live, which is the quickest way to tell whether a deploy actually landed.
 
 ## 1. Push

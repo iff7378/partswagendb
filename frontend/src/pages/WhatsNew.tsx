@@ -19,28 +19,24 @@ export default function WhatsNew() {
     staleTime: 60 * 60 * 1000,
   })
 
-  const running = health.data?.version
-
   return (
     <>
       <PageHeader title="What's new" subtitle="Changes worth noticing, newest first" />
 
+      {/* Once, at the top. Marking the matching entry meant guessing a build
+          number before the build existed, which was wrong as often as right. */}
+      <p className="mb-5 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+        You are running <span className="font-mono font-semibold">{health.data?.version ?? '…'}</span>
+        <span className="text-ink-soft">
+          {' '}· if something below is missing, refresh the page.
+        </span>
+      </p>
+
       <div className="space-y-4">
         {RELEASES.map((release) => {
-          const live = running === release.version
           return (
-            <section key={release.version} className="card p-5">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-lg font-bold">{release.headline}</h2>
-                <p className="text-xs text-ink-soft">
-                  <span className="font-mono">{release.version}</span>
-                  {live && (
-                    <span className="ml-2 chip bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200">
-                      Running now
-                    </span>
-                  )}
-                </p>
-              </div>
+            <section key={release.on} className="card p-5">
+              <h2 className="text-lg font-bold">{release.headline}</h2>
               <p className="text-sm text-ink-soft">{date(release.on)}</p>
 
               <ul className="mt-3 space-y-2.5">
