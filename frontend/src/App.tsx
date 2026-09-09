@@ -14,6 +14,7 @@ import Parts from './pages/Parts'
 import Sales from './pages/Sales'
 import SaleSchedule from './pages/SaleSchedule'
 import Help from './pages/Help'
+import WhatsNew from './pages/WhatsNew'
 import Tasks from './pages/Tasks'
 import Settings from './pages/Settings'
 import Locations from './pages/Locations'
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/help" element={<Help />} />
+        <Route path="/whats-new" element={<WhatsNew />} />
         <Route
           path="/scan"
           element={

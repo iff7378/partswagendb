@@ -127,7 +127,9 @@ function VersionFooter() {
         How this works
       </NavLink>
       <span className="mx-2">·</span>
-      PartsWagen {data?.version ?? '…'}
+      <NavLink to="/whats-new" className="hover:underline" title="What changed recently">
+        PartsWagen {data?.version ?? '…'}
+      </NavLink>
     </p>
   )
 }

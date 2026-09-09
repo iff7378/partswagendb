@@ -17,6 +17,21 @@ build, run the playbook.
 You never build images yourself. GitHub Actions builds them on every push to
 `main` and publishes them to GHCR; the playbook pulls whatever is newest.
 
+## 0. Write the release note
+
+Add an entry to `frontend/src/lib/changelog.ts` for anything someone would
+notice — a new screen, a changed default, a fix to something that was wrong.
+Not every commit. It shows up in the app under **What's new**, reached by
+clicking the version at the bottom of any page.
+
+Write it for whoever uses the app, not whoever wrote it. "You can sell a whole
+interior on one line" beats "sale lines accept multiple parts".
+
+The version string is worked out at build time from the date, so use the next
+one for today: `2026.09.09` for the first release of a day, `-1` for the
+second, and so on. The entry marks itself **Running now** once that version is
+live, which is the quickest way to tell whether a deploy actually landed.
+
 ## 1. Push
 
 ```bash
