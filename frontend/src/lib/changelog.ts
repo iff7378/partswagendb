@@ -62,6 +62,14 @@ export const RELEASES: Release[] = [
         text: 'This page, linked at the bottom of every screen.',
       },
       {
+        kind: 'new',
+        text: 'Photos on a part open full size, with arrows to move between them. The grid also loads thumbnails now rather than full-size originals, so a part with several photos opens faster.',
+      },
+      {
+        kind: 'fixed',
+        text: 'Adding photos to a part that already existed silently did nothing. Introduced the same day by the fix that let several photos be taken in a row.',
+      },
+      {
         kind: 'better',
         text: 'The parts page shows what you still have by default. Sold and scrapped parts sit behind "Everything, sold included", the same way voided sales do.',
       },

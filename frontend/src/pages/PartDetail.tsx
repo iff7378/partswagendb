@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import History from '../components/History'
+import Lightbox from '../components/Lightbox'
 import Listings from '../components/Listings'
 import TaskPanel from '../components/TaskList'
 import QrScanner from '../components/QrScannerLazy'
@@ -26,6 +27,7 @@ export default function PartDetailPage() {
   const queryClient = useQueryClient()
   const { canEdit } = useAuth()
   const [editing, setEditing] = useState(false)
+  const [viewing, setViewing] = useState<number | null>(null)
 
   const part = useQuery({
     queryKey: ['part', id],
@@ -36,8 +38,8 @@ export default function PartDetailPage() {
   })
 
   const uploadPhoto = useMutation({
-    mutationFn: async (files: FileList) => {
-      for (const file of Array.from(files)) {
+    mutationFn: async (files: File[]) => {
+      for (const file of files) {
         const form = new FormData()
         form.append('file', file)
         await api.upload(`/photos/parts/${id}`, form)
@@ -147,13 +149,22 @@ export default function PartDetailPage() {
           <section className="space-y-3">
             {p.photos.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
-                {p.photos.map((photo) => (
+                {p.photos.map((photo, index) => (
                   <figure key={photo.id} className="card group relative overflow-hidden">
-                    <img
-                      src={photo.url ?? undefined}
-                      alt=""
-                      className="aspect-square w-full object-cover"
-                    />
+                    {/* Thumbnail here, full size in the viewer: the grid was
+                        downloading 2048px originals to draw them 200px wide. */}
+                    <button
+                      type="button"
+                      className="block w-full cursor-zoom-in"
+                      onClick={() => setViewing(index)}
+                      aria-label={`View photo ${index + 1} full size`}
+                    >
+                      <img
+                        src={photo.thumbnail_url ?? photo.url ?? undefined}
+                        alt=""
+                        className="aspect-square w-full object-cover"
+                      />
+                    </button>
                     {photo.is_primary && (
                       <span className="absolute left-2 top-2 chip bg-white/95 text-ink ring-slate-200">
                         Main
@@ -198,8 +209,12 @@ export default function PartDetailPage() {
                 multiple
                 className="field"
                 onChange={(e) => {
-                  if (e.target.files?.length) uploadPhoto.mutate(e.target.files)
+                  // Copy the list before clearing the input: the upload runs
+                  // asynchronously and resetting value empties the FileList
+                  // out from under it, so nothing was being sent.
+                  const chosen = Array.from(e.target.files ?? [])
                   e.target.value = ''
+                  if (chosen.length) uploadPhoto.mutate(chosen)
                 }}
               />
             )}
@@ -311,6 +326,15 @@ export default function PartDetailPage() {
       )}
 
       <TaskPanel anchor={{ part_id: p.id }} query={`part_id=${p.id}`} />
+
+      {viewing !== null && (
+        <Lightbox
+          photos={p.photos}
+          index={viewing}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+        />
+      )}
 
       <Listings partId={p.id} listings={p.listings} />
 

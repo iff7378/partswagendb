@@ -177,6 +177,11 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           stay selected between saves, so use <em>Save &amp; add another</em> and keep going.
         </P>
         <P>
+          Tap any photo on a part to see it full size, with arrow keys or the buttons to move
+          between them and <em>Open original</em> if you need the file itself. Casting numbers
+          and damage do not read at thumbnail size.
+        </P>
+        <P>
           Photograph the part number sticker if there is one. Part numbers are read off the
           photo automatically a few seconds after upload, and appear as tappable chips on the
           part&rsquo;s page — tap one to fill the field. It is not instant: a batch of twenty
