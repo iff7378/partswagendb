@@ -35,6 +35,21 @@ export const KIND_STYLES: Record<ChangeKind, string> = {
 
 export const RELEASES: Release[] = [
   {
+    version: '2026.09.09-3',
+    on: '2026-09-09',
+    headline: 'This page, and version numbers that mean something',
+    changes: [
+      {
+        kind: 'new',
+        text: 'This page. Click the version at the bottom of any screen to see what changed and when. The entry matching what is running marks itself, so it also answers whether a deploy landed.',
+      },
+      {
+        kind: 'fixed',
+        text: 'Two releases pushed close together could carry the same version number, so the number shown in the app did not reliably identify the code running. It is now worked out once and claimed before anything is built.',
+      },
+    ],
+  },
+  {
     version: '2026.09.09-1',
     on: '2026-09-09',
     headline: 'A to-do list, and costs that belong to a sale',

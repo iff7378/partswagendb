@@ -27,9 +27,15 @@ clicking the version at the bottom of any page.
 Write it for whoever uses the app, not whoever wrote it. "You can sell a whole
 interior on one line" beats "sale lines accept multiple parts".
 
-The version string is worked out at build time from the date, so use the next
-one for today: `2026.09.09` for the first release of a day, `-1` for the
-second, and so on. The entry marks itself **Running now** once that version is
+The version is claimed by the build before anything else runs: `2026.09.09` for
+the first release of a day, `-1` for the second, and so on. To see what the
+next one will be, count today's tags:
+
+```bash
+git fetch --tags --quiet && git tag -l "$(date -u +%Y.%m.%d)*" | wc -l
+```
+
+A count of 3 means the next release is `2026.09.09-3`. The entry marks itself **Running now** once that version is
 live, which is the quickest way to tell whether a deploy actually landed.
 
 ## 1. Push

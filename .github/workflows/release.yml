@@ -9,9 +9,62 @@ on:
 env:
   REGISTRY: ghcr.io
 
+# Two releases must not work out their number at the same time, or they reach
+# the same answer.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
+  version:
+    name: Work out the version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.calver.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claim the CalVer version
+        id: calver
+        run: |
+          # Claimed by creating its tag before anything is built, and used for
+          # both the image and the tag from here on.
+          #
+          # This used to be worked out twice -- once when building, once when
+          # tagging afterwards -- so two releases pushed close together read
+          # the same tag count and carried the same version string. The number
+          # in the app then did not identify the code running, which is the one
+          # thing a version is for.
+          git fetch --tags --force --quiet
+          today="$(date -u +%Y.%m.%d)"
+          n="$(git tag -l "${today}*" | wc -l)"
+          if [ "$n" -gt 0 ]; then
+            version="${today}-${n}"
+          else
+            version="$today"
+          fi
+
+          # Only main gets a tag; a rebuild of an existing tag reuses its name.
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            git tag "$version"
+            # Fails loudly if something else claimed it first, rather than
+            # quietly shipping a duplicate.
+            git push origin "$version"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version: $version"
+
   publish:
     runs-on: ubuntu-latest
+    needs: version
     permissions:
       contents: read
       packages: write
@@ -39,30 +92,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Work out the CalVer version
-        id: version
-        run: |
-          # Date-based, with a counter so several releases in one day stay
-          # distinct. Reads the tags that already exist rather than a file, so
-          # nothing has to be bumped by hand.
-          git fetch --tags --force --quiet
-          today="$(date -u +%Y.%m.%d)"
-          n="$(git tag -l "${today}*" | wc -l)"
-          if [ "$n" -gt 0 ]; then
-            version="${today}-${n}"
-          else
-            version="$today"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Version: $version"
-
       - name: Work out the tags
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.component }}
           tags: |
-            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=${{ needs.version.outputs.version }}
             type=sha,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
@@ -71,37 +107,10 @@ jobs:
         with:
           context: ${{ matrix.context }}
           build-args: |
-            APP_VERSION=${{ steps.version.outputs.version }}
+            APP_VERSION=${{ needs.version.outputs.version }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
-
-  tag:
-    name: Tag the release
-    runs-on: ubuntu-latest
-    needs: publish
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Create the CalVer tag
-        run: |
-          git fetch --tags --force --quiet
-          today="$(date -u +%Y.%m.%d)"
-          n="$(git tag -l "${today}*" | wc -l)"
-          if [ "$n" -gt 0 ]; then
-            version="${today}-${n}"
-          else
-            version="$today"
-          fi
-          git tag "$version"
-          git push origin "$version"
-          echo "Tagged $version"
