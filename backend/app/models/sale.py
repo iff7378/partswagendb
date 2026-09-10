@@ -141,5 +141,22 @@ class SaleItem(Base, TimestampMixin):
     unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
 
     @property
+    def title(self) -> str:
+        """What to call this line now.
+
+        A line covering one part was labelled from that part when it was
+        recorded, and the entry form offers no way to type something else for
+        it -- so the stored text is only ever a copy of the name. Renaming a
+        part is a correction, and the sale should follow it; a lot line already
+        did, because it lists its parts live.
+
+        The stored description stays as the record of what it was called at the
+        time, and is all that is left once a part is deleted.
+        """
+        if len(self.parts) == 1:
+            return self.parts[0].title
+        return self.description
+
+    @property
     def line_total(self) -> Decimal:
         return self.unit_price * self.quantity

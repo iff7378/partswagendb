@@ -49,7 +49,7 @@ function toLines(sale: SaleDetail): Line[] {
     kind: item.is_shell ? 'shell' : item.parts.length > 0 ? 'parts' : 'other',
     partIds: item.parts.map((p) => p.id),
     vehicleId: item.vehicle_id ? String(item.vehicle_id) : '',
-    description: item.description,
+    description: item.parts.length === 1 ? '' : item.description,
     unit_price: item.unit_price,
     quantity: String(item.quantity),
   }))
@@ -498,7 +498,15 @@ function SaleRow({
                             Shell
                           </span>
                         )}
-                        {item.description}
+                        {item.title}
+                        {/* Renaming a part corrects the sale, but what it was
+                            called when the money changed hands is still worth
+                            being able to see. */}
+                        {item.title !== item.description && (
+                          <span className="block text-xs text-ink-soft">
+                            recorded as &ldquo;{item.description}&rdquo;
+                          </span>
+                        )}
                         {item.parts.length > 1 && (
                           <span className="block text-xs text-ink-soft">
                             {item.parts.length} parts: {item.parts.map((p) => p.title).join(', ')}

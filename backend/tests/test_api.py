@@ -1626,3 +1626,87 @@ def test_in_stock_hides_what_has_gone(client: TestClient, auth_headers) -> None:
     assert len(titles("")) == 5
     # And asking for sold explicitly still works.
     assert titles("status=sold") == {"Long gone"}
+
+
+def test_renaming_a_part_updates_the_sale_that_covers_it(
+    client: TestClient, auth_headers, admin
+) -> None:
+    """A rename is a correction, so every view of the sale should follow it."""
+    car = _car(client, auth_headers)
+    part = _part(client, auth_headers, "RL Door", vehicle_id=car["id"], status="available")
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-10",
+            "paid_on": "2026-09-10",
+            "fulfilled_on": "2026-09-10",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    ).json()
+    assert sale["items"][0]["title"] == "RL Door"
+
+    client.patch(f"/api/parts/{part['id']}", headers=auth_headers, json={"title": "Rear left door"})
+
+    detail = client.get(f"/api/sales/{sale['id']}", headers=auth_headers).json()
+    assert detail["items"][0]["title"] == "Rear left door"
+    # The record of what it was called at the time is not thrown away.
+    assert detail["items"][0]["description"] == "RL Door"
+
+    # Every other view of the same line agrees.
+    car_lines = client.get(f"/api/vehicles/{car['id']}/sales", headers=auth_headers).json()
+    assert car_lines[0]["description"] == "Rear left door"
+    ledger = client.get(
+        "/api/reports/ledger?period_start=2026-01-01&period_end=2026-12-31",
+        headers=auth_headers,
+    ).json()
+    sale_rows = [e for e in ledger["entries"] if e["kind"] == "sale"]
+    assert sale_rows[0]["description"] == "Rear left door"
+
+
+def test_a_lot_keeps_the_name_it_was_given(client: TestClient, auth_headers, admin) -> None:
+    a = _part(client, auth_headers, "Seats", status="available")
+    b = _part(client, auth_headers, "Dash", status="available")
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-10",
+            "collected_by_id": admin.id,
+            "items": [
+                {
+                    "part_ids": [a["id"], b["id"]],
+                    "description": "Entire interior",
+                    "unit_price": "400.00",
+                }
+            ],
+        },
+    ).json()
+
+    client.patch(f"/api/parts/{a['id']}", headers=auth_headers, json={"title": "Front seats"})
+
+    detail = client.get(f"/api/sales/{sale['id']}", headers=auth_headers).json()
+    # A name someone chose for a lot is theirs, not derived from a part.
+    assert detail["items"][0]["title"] == "Entire interior"
+    assert {p["title"] for p in detail["items"][0]["parts"]} == {"Front seats", "Dash"}
+
+
+def test_a_deleted_part_leaves_the_sale_readable(client: TestClient, auth_headers, admin) -> None:
+    part = _part(client, auth_headers, "Alternator", status="available")
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-10",
+            "collected_by_id": admin.id,
+            "items": [{"part_ids": [part["id"]], "unit_price": "85.00"}],
+        },
+    ).json()
+    client.delete(f"/api/sales/{sale['id']}", headers=auth_headers)
+    client.delete(f"/api/parts/{part['id']}", headers=auth_headers)
+
+    detail = client.get(f"/api/sales/{sale['id']}", headers=auth_headers).json()
+    # Nothing left to follow, so the snapshot is what the sale still says.
+    assert detail["items"][0]["parts"] == []
+    assert detail["items"][0]["title"] == "Alternator"

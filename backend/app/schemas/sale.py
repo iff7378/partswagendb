@@ -31,6 +31,9 @@ class SaleItemPart(ORMModel):
 
 class SaleItemRead(ORMModel):
     id: int
+    # What it is called now, which follows a renamed part; description is what
+    # it was called when the sale was recorded.
+    title: str
     parts: list[SaleItemPart] = Field(default_factory=list)
     vehicle_id: int | None = None
     vehicle_name: str | None = None

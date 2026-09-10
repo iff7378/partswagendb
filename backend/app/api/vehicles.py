@@ -333,7 +333,7 @@ def vehicle_sales(db: DbSession, _: CurrentUser, vehicle_id: int) -> list[Vehicl
             paid_on=item.sale.paid_on,
             state=item.sale.state,
             buyer_name=item.sale.buyer_name,
-            description=item.description,
+            description=item.title,
             is_shell=item.is_shell,
             quantity=item.quantity,
             line_total=item.line_total,

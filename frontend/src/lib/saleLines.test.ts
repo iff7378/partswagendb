@@ -6,6 +6,7 @@ import type { SaleDetail, SaleItem } from './types'
 function line(partial: Partial<SaleItem> = {}): SaleItem {
   return {
     id: 1,
+    title: 'Something',
     parts: [],
     vehicle_id: null,
     vehicle_name: null,

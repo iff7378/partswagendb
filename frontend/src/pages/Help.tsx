@@ -529,6 +529,11 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
             <em>Try reading again</em>.
           </>,
           <>
+            <strong>Renaming a part updates the sales it is on.</strong> A rename is nearly
+            always a correction, so the sale follows it and shows what it was called at the
+            time underneath. A name you gave a lot stays as you typed it.
+          </>,
+          <>
             <strong>A shell can only be scrapped once.</strong> If a car is missing from the
             scrap list, it has already been weighed in.
           </>,

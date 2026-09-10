@@ -513,7 +513,7 @@ def ledger(
                     on=sale.paid_on or sale.sold_on,
                     kind="sale",
                     reference=sale.reference,
-                    description=item.description,
+                    description=item.title,
                     vehicle_id=vehicle.id if vehicle else None,
                     vehicle_name=vehicle.display_name if vehicle else None,
                     person=sale.collected_by.full_name,

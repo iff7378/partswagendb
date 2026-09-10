@@ -42,6 +42,16 @@ export const KIND_STYLES: Record<ChangeKind, string> = {
 
 export const RELEASES: Release[] = [
   {
+    on: '2026-09-10',
+    headline: 'Renaming a part now updates its sales',
+    changes: [
+      {
+        kind: 'fixed',
+        text: 'A sale kept showing the name a part had when it was sold, so correcting a name left the sale reading wrong. It now follows the part, with what it was called at the time shown underneath. A name you gave a lot stays as you typed it, and a sale for a part you later deleted still says what was sold.',
+      },
+    ],
+  },
+  {
     on: '2026-09-09',
     headline: 'A to-do list, costs on a sale, and this page',
     changes: [

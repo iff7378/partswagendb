@@ -208,6 +208,8 @@ export interface SaleItemPart {
 
 export interface SaleItem {
   id: number
+  /** What it is called now; `description` is what it was called at the time. */
+  title: string
   /** Everything this line covered: one part, a lot of them, or none. */
   parts: SaleItemPart[]
   vehicle_id: number | null
