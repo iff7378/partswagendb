@@ -27,6 +27,8 @@ class SaleItemPart(ORMModel):
     id: int
     sku: str
     title: str
+    vehicle_id: int | None = None
+    vehicle_name: str | None = None
 
 
 class SaleItemRead(ORMModel):

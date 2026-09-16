@@ -1710,3 +1710,41 @@ def test_a_deleted_part_leaves_the_sale_readable(client: TestClient, auth_header
     # Nothing left to follow, so the snapshot is what the sale still says.
     assert detail["items"][0]["parts"] == []
     assert detail["items"][0]["title"] == "Alternator"
+
+
+def test_a_sale_line_names_the_car_each_part_came_off(
+    client: TestClient, auth_headers, admin
+) -> None:
+    """Three parts can share a name; the car is what tells them apart."""
+    one = _car(client, auth_headers, nickname="The silver wagon")
+    two = _car(client, auth_headers, nickname="The blue one")
+    a = _part(client, auth_headers, "Emissions System", vehicle_id=one["id"], status="available")
+    b = _part(client, auth_headers, "Emissions System", vehicle_id=two["id"], status="available")
+    loose = _part(client, auth_headers, "Bracket", status="available")
+
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-16",
+            "collected_by_id": admin.id,
+            "items": [
+                {"part_ids": [a["id"]], "unit_price": "100.00"},
+                {
+                    "part_ids": [b["id"], loose["id"]],
+                    "description": "Job lot",
+                    "unit_price": "150.00",
+                },
+            ],
+        },
+    ).json()
+
+    lines = {item["title"]: item for item in sale["items"]}
+    single = lines["Emissions System"]["parts"][0]
+    assert single["vehicle_name"] == "The silver wagon"
+    assert single["vehicle_id"] == one["id"]
+    # Every part on a lot carries its own car, which need not be the same one.
+    lot = {p["title"]: p for p in lines["Job lot"]["parts"]}
+    assert lot["Emissions System"]["vehicle_name"] == "The blue one"
+    assert lot["Bracket"]["vehicle_name"] is None
+    assert lot["Bracket"]["vehicle_id"] is None

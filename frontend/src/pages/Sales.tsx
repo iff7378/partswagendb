@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
 
 import History from '../components/History'
@@ -24,7 +24,15 @@ import {
   money,
   toLocalInput,
 } from '../lib/format'
-import type { Page, Sale, SaleChannel, SaleDetail, SaleState, User } from '../lib/types'
+import type {
+  Page,
+  Sale,
+  SaleChannel,
+  SaleDetail,
+  SaleItemPart,
+  SaleState,
+  User,
+} from '../lib/types'
 
 const STATE_FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'Everything' },
@@ -488,17 +496,20 @@ function SaleRow({
                   {detail.data.items.map((item) => (
                     <tr key={item.id}>
                       <td className="py-1.5">
-                        {item.parts.length === 1 && (
-                          <span className="mr-2 font-mono text-xs text-ink-soft">
-                            {item.parts[0].sku}
-                          </span>
-                        )}
                         {item.is_shell && (
                           <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-ink-soft">
                             Shell
                           </span>
                         )}
-                        {item.title}
+
+                        {/* One part: the line is that part, so the whole label
+                            opens it. A SKU that does not click is a dead end. */}
+                        {item.parts.length === 1 ? (
+                          <PartLink part={item.parts[0]} />
+                        ) : (
+                          item.title
+                        )}
+
                         {/* Renaming a part corrects the sale, but what it was
                             called when the money changed hands is still worth
                             being able to see. */}
@@ -507,11 +518,17 @@ function SaleRow({
                             recorded as &ldquo;{item.description}&rdquo;
                           </span>
                         )}
+
                         {item.parts.length > 1 && (
-                          <span className="block text-xs text-ink-soft">
-                            {item.parts.length} parts: {item.parts.map((p) => p.title).join(', ')}
-                          </span>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {item.parts.map((part) => (
+                              <li key={part.id}>
+                                <PartLink part={part} />
+                              </li>
+                            ))}
+                          </ul>
                         )}
+
                         {item.parts.length === 0 && item.vehicle_name && !item.is_shell && (
                           <span className="block text-xs text-ink-soft">
                             off {item.vehicle_name}
@@ -658,6 +675,26 @@ function SaleRow({
         </div>
       )}
     </div>
+  )
+}
+
+/** A part on a sale line: what it is, and which car it came off. */
+function PartLink({ part }: { part: SaleItemPart }) {
+  return (
+    <>
+      <Link to={`/parts/${part.id}`} className="hover:text-rust hover:underline">
+        <span className="mr-2 font-mono text-xs text-ink-soft">{part.sku}</span>
+        {part.title}
+      </Link>
+      {part.vehicle_id && (
+        <span className="text-xs text-ink-soft">
+          {' · '}
+          <Link to={`/vehicles/${part.vehicle_id}`} className="hover:text-rust hover:underline">
+            {part.vehicle_name}
+          </Link>
+        </span>
+      )}
+    </>
   )
 }
 

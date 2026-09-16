@@ -80,6 +80,15 @@ class Part(Base, TimestampMixin):
     )
 
     @property
+    def vehicle_name(self) -> str | None:
+        """Which car it came off, for anywhere a part is listed out of context.
+
+        Three parts can share a name and a price; the car is what tells them
+        apart on a sale.
+        """
+        return self.vehicle.display_name if self.vehicle else None
+
+    @property
     def is_sellable(self) -> bool:
         """Could still go on a sale.
 

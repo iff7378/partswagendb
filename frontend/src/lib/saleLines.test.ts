@@ -79,8 +79,8 @@ describe('voidWarning', () => {
 
   it('counts the parts it will actually return', () => {
     const parts = [
-      { id: 1, sku: 'P-000001', title: 'Seats' },
-      { id: 2, sku: 'P-000002', title: 'Dash' },
+      { id: 1, sku: 'P-000001', title: 'Seats', vehicle_id: null, vehicle_name: null },
+      { id: 2, sku: 'P-000002', title: 'Dash', vehicle_id: null, vehicle_name: null },
     ]
     expect(voidWarning(sale({ paid_on: '2026-09-01', items: [line({ parts })] }))).toBe(
       'Void S26-0012? 2 parts go back into stock and the settle-up report changes.',
@@ -88,7 +88,9 @@ describe('voidWarning', () => {
   })
 
   it('uses the singular for one part', () => {
-    const parts = [{ id: 1, sku: 'P-000001', title: 'Seats' }]
+    const parts = [
+      { id: 1, sku: 'P-000001', title: 'Seats', vehicle_id: null, vehicle_name: null },
+    ]
     expect(voidWarning(sale({ items: [line({ parts })] }))).toContain('1 part goes back into stock')
   })
 })

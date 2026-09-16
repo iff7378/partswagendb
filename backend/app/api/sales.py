@@ -25,7 +25,7 @@ from app.services.identifiers import next_sale_reference
 router = APIRouter(prefix="/sales", tags=["sales"])
 
 _LOADERS = (
-    selectinload(Sale.items).selectinload(SaleItem.parts),
+    selectinload(Sale.items).selectinload(SaleItem.parts).selectinload(Part.vehicle),
     selectinload(Sale.items).selectinload(SaleItem.vehicle),
     selectinload(Sale.collected_by),
     selectinload(Sale.voided_by),

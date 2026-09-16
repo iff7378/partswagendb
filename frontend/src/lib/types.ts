@@ -204,6 +204,8 @@ export interface SaleItemPart {
   id: number
   sku: string
   title: string
+  vehicle_id: number | null
+  vehicle_name: string | null
 }
 
 export interface SaleItem {

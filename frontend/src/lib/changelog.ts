@@ -42,6 +42,16 @@ export const KIND_STYLES: Record<ChangeKind, string> = {
 
 export const RELEASES: Release[] = [
   {
+    on: '2026-09-16',
+    headline: 'Sale lines link to their parts',
+    changes: [
+      {
+        kind: 'better',
+        text: 'The part on a sale line is now a link — tap it and you are on the part. Each line also names the car the part came off, which is what tells three identically named parts apart. A lot lists every part it covered the same way.',
+      },
+    ],
+  },
+  {
     on: '2026-09-10',
     headline: 'Renaming a part now updates its sales',
     changes: [

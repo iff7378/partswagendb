@@ -337,6 +337,11 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           ]}
         />
         <P>
+          Each line names the part, its SKU and the car it came off, and all of those are
+          links &mdash; open a sale, tap the part, and you are looking at it. A lot lists every
+          part it covered the same way.
+        </P>
+        <P>
           <strong>Who took the money</strong> is the important field. It is what the settle-up
           report is built on.
         </P>
