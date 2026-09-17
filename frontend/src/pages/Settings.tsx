@@ -585,7 +585,7 @@ function Metrics() {
         <MetricRow
           label="Sales"
           value={m.sales_total}
-          hint={`${m.sale_lines_total} lines · ${money(m.gross_sales)} before fees`}
+          hint={`${m.sale_lines_total} lines · ${money(m.gross_sales)} sold`}
         />
         <MetricRow
           label="Recorded costs"

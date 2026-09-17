@@ -85,7 +85,7 @@ def _lifecycle(client: TestClient, headers, admin) -> dict:
         paid_on="2026-09-02",
         fulfilled_on="2026-09-02",
     )
-    # A lot of two parts for one price, with fees taken out.
+    # A lot of two parts sold for one price.
     sale(
         [
             {
@@ -96,7 +96,6 @@ def _lifecycle(client: TestClient, headers, admin) -> dict:
         ],
         paid_on="2026-09-03",
         fulfilled_on="2026-09-03",
-        fees="20.00",
     )
     # Something never catalogued, booked against the car.
     sale(
@@ -128,21 +127,21 @@ def test_the_books_balance_across_a_whole_car(client: TestClient, auth_headers, 
     sales = client.get("/api/sales?limit=200", headers=auth_headers).json()["items"]
 
     # 1. Revenue is the net of every paid sale, and only those.
-    paid_net = sum(D(s["net_collected"]) for s in sales if s["paid_on"])
+    paid_net = sum(D(s["subtotal"]) for s in sales if s["paid_on"])
     assert D(ledger["total_revenue"]) == paid_net
-    # 85 + (400 - 20 fees) + 60 + 180
-    assert paid_net == D("705.00")
+    # 85 + 400 + 60 + 180
+    assert paid_net == D("725.00")
 
-    # 2. The unpaid sale is nowhere in the money, on any page. Per-car figures
-    #    are gross line totals; the ledger is net cash, so they differ by the
-    #    20 of fees, which is charged on the sale and belongs to no car.
+    # 2. The unpaid sale is nowhere in the money, on any page. With nothing
+    #    charged on a sale as a whole any more, per-car and ledger revenue are
+    #    the same number reached two ways.
     assert D(row["total_revenue"]) == D("725.00")
     assert D(detail["total_revenue"]) == D("725.00")
 
-    #    That gap must be reported, not left for someone to puzzle over.
+    #    Any remainder must be reported, not left for someone to puzzle over.
     assert sum(D(v["total_revenue"]) for v in report["vehicles"]) + D(
         report["unattributed_revenue"]
-    ) + D(report["sale_adjustments"]) == D(ledger["total_revenue"])
+    ) == D(ledger["total_revenue"])
 
     # 3. Costs split into the car's own and the venture's overheads.
     assert D(row["total_expenses"]) == D("1000.00")
@@ -158,9 +157,9 @@ def test_the_books_balance_across_a_whole_car(client: TestClient, auth_headers, 
     #    accounted for on both sides.
     assert D(row["profit"]) == D("725.00") - D("1000.00")
     per_car = sum(D(v["profit"]) for v in report["vehicles"])
-    assert per_car - D(report["general_expenses"]) + D(report["unattributed_revenue"]) + D(
-        report["sale_adjustments"]
-    ) == D(ledger["profit"])
+    assert per_car - D(report["general_expenses"]) + D(report["unattributed_revenue"]) == D(
+        ledger["profit"]
+    )
 
     # 6. Scrap is part of revenue, not on top of it.
     assert D(row["scrap_revenue"]) == D("180.00")
@@ -176,7 +175,6 @@ def test_the_books_balance_across_a_whole_car(client: TestClient, auth_headers, 
     attributed = sum(D(line["line_total"]) for line in lines if line["paid_on"])
     assert attributed == D(row["total_revenue"])
     assert D(report["unattributed_revenue"]) == D("0.00")
-    assert D(report["sale_adjustments"]) == D("-20.00")
 
 
 def test_paying_a_pending_sale_moves_every_figure_together(
@@ -262,10 +260,8 @@ def test_the_ledger_adds_up_to_the_summary(client: TestClient, auth_headers, adm
     assert unpaid[0]["state"] == "pending"
     assert D(ledger["uncounted"]) == D("150.00")
 
-    # Fees are their own row rather than folded silently into a line.
-    adjustments = [e for e in ledger["entries"] if "less fees" in e["description"]]
-    assert len(adjustments) == 1
-    assert D(adjustments[0]["amount"]) == D("-20.00")
+    # Nothing is charged on a sale as a whole, so every revenue row is a line.
+    assert not [e for e in ledger["entries"] if "less fees" in e["description"]]
 
 
 def test_the_ledger_names_the_car_behind_each_line(client: TestClient, auth_headers, admin) -> None:
@@ -335,11 +331,12 @@ def test_one_partner_collects_while_the_other_pays_to_ship(
             "paid_on": "2026-09-08",
             "fulfilled_on": "2026-09-08",
             "collected_by_id": admin.id,
-            "shipping": "15.00",
-            "items": [{"part_ids": [part["id"]], "unit_price": "115.00"}],
+            # 130 all in: what the buyer handed over is the line, whatever part
+            # of it they thought was postage.
+            "items": [{"part_ids": [part["id"]], "unit_price": "130.00"}],
         },
     ).json()
-    assert D(sale["net_collected"]) == D("130.00")
+    assert D(sale["subtotal"]) == D("130.00")
 
     cost = client.post(
         "/api/expenses",
@@ -359,7 +356,7 @@ def test_one_partner_collects_while_the_other_pays_to_ship(
     assert len(detail["costs"]) == 1
     assert detail["costs"][0]["paid_by"]["id"] == kevin.id
     # Collected is still what Ian took; the margin is what the venture kept.
-    assert D(detail["net_collected"]) == D("130.00")
+    assert D(detail["subtotal"]) == D("130.00")
     assert D(detail["net_after_costs"]) == D("118.00")
 
     report = client.get(f"/api/settle-up?{PERIOD}", headers=auth_headers).json()

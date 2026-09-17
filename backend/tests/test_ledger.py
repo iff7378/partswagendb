@@ -28,7 +28,6 @@ def add_sale(
     user_id: int,
     amount: str,
     when: date = PERIOD_END,
-    fees: str = "0",
     reference: str | None = None,
 ) -> Sale:
     sale = Sale(
@@ -39,7 +38,6 @@ def add_sale(
         paid_on=when,
         fulfilled_on=when,
         collected_by_id=user_id,
-        fees=Decimal(fees),
     )
     sale.items.append(SaleItem(description="A part", quantity=1, unit_price=Decimal(amount)))
     db.add(sale)
@@ -70,11 +68,11 @@ def test_one_partner_funds_the_other_collects(db: Session, make_user) -> None:
     collector = make_user("collector@example.com", is_partner=True, share_bps=5000)
 
     add_expense(db, payer.id, "2000.00")
-    add_sale(db, collector.id, "1600.00", fees="100.00")
+    add_sale(db, collector.id, "1500.00")
 
     result = report(db)
 
-    # Revenue is net of fees: 1600 - 100 = 1500, against 2000 of cost.
+    # 1500 collected against 2000 of cost.
     assert result.total_revenue == Decimal("1500.00")
     assert result.total_expenses == Decimal("2000.00")
     assert result.profit == Decimal("-500.00")

@@ -238,11 +238,7 @@ export interface Sale {
   channel: SaleChannel
   buyer_name: string | null
   buyer_contact: string | null
-  shipping: string
-  fees: string
-  tax: string
   subtotal: string
-  net_collected: string
   collected_by_id: number
   collected_by: UserBrief
   payment_method: string | null
@@ -355,8 +351,6 @@ export interface VehicleResults {
   general_expenses: string
   /** Paid lines that reached no car at all. */
   unattributed_revenue: string
-  /** Shipping and tax less fees, charged per sale rather than per car. */
-  sale_adjustments: string
 }
 
 export interface AppMetrics {
@@ -394,7 +388,7 @@ export interface ScheduleEntry {
   buyer_name: string | null
   buyer_contact: string | null
   channel: SaleChannel
-  net_collected: string
+  subtotal: string
   paid_on: string | null
   summary: string
   part_count: number

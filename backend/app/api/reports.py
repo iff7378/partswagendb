@@ -185,13 +185,10 @@ class VehicleResults(BaseModel):
     # Money that is real but belongs to no car, so the rows above can be
     # reconciled against the ledger instead of quietly disagreeing with it:
     #
-    #   ledger revenue = sum(car revenue) + unattributed + adjustments
+    #   ledger revenue = sum(car revenue) + unattributed
     #
     # Unattributed is a line naming no car whose parts came off none either.
-    # Adjustments are shipping and tax less fees, which are charged on the sale
-    # as a whole and so cannot be pinned to one car.
     unattributed_revenue: Decimal = ZERO
-    sale_adjustments: Decimal = ZERO
 
 
 @router.get("/reports/by-vehicle", response_model=VehicleResults)
@@ -287,12 +284,6 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
         .join(Sale, Sale.id == SaleItem.sale_id)
         .where(Sale.paid_on.is_not(None), Sale.voided_at.is_(None))
     ).scalar_one_or_none()
-    adjustments = db.execute(
-        select(func.sum(Sale.shipping + Sale.tax - Sale.fees)).where(
-            Sale.paid_on.is_not(None), Sale.voided_at.is_(None)
-        )
-    ).scalar_one_or_none()
-
     rows: list[VehicleResult] = []
     for vehicle in db.execute(select(Vehicle).order_by(Vehicle.created_at.desc())).scalars():
         total, sold = part_counts.get(vehicle.id, (0, 0))
@@ -319,7 +310,6 @@ def by_vehicle(db: DbSession, _: CurrentUser) -> VehicleResults:
         vehicles=rows,
         general_expenses=money(general) if general else ZERO,
         unattributed_revenue=money(paid_lines or 0) - money(attributed),
-        sale_adjustments=money(adjustments or 0),
     )
 
 
@@ -523,24 +513,6 @@ def ledger(
                     sale_id=sale.id,
                 )
             )
-        # Charged on the sale rather than any line, so they get their own row
-        # instead of being folded invisibly into one.
-        adjustment = money(sale.shipping + sale.tax - sale.fees)
-        if adjustment != ZERO:
-            entries.append(
-                LedgerEntry(
-                    on=sale.paid_on or sale.sold_on,
-                    kind="sale",
-                    reference=sale.reference,
-                    description="Shipping and tax, less fees",
-                    person=sale.collected_by.full_name,
-                    amount=adjustment,
-                    state=sale.state,
-                    counted=counted,
-                    sale_id=sale.id,
-                )
-            )
-
     expenses = db.execute(
         select(VehicleExpense)
         .options(selectinload(VehicleExpense.paid_by), selectinload(VehicleExpense.vehicle))

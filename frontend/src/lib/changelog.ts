@@ -42,6 +42,20 @@ export const KIND_STYLES: Record<ChangeKind, string> = {
 
 export const RELEASES: Release[] = [
   {
+    on: '2026-09-18',
+    headline: 'One place to record money going out',
+    changes: [
+      {
+        kind: 'better',
+        text: 'The Shipping, Fees and Tax boxes are gone from the sale form. There were two boxes called “Shipping” meaning opposite things — what the buyer paid you, and what it cost you to send it — and nothing on screen said which. A sale is now its lines and nothing else: whatever the buyer hands over is the price you type.',
+      },
+      {
+        kind: 'better',
+        text: 'Anything you spend on a sale goes under “What it cost us”, which is the only place it can record who actually paid. That is what keeps the settle-up honest when one of you collects the money and the other buys the postage.',
+      },
+    ],
+  },
+  {
     on: '2026-09-17',
     headline: 'The app tells you when your page is out of date',
     changes: [

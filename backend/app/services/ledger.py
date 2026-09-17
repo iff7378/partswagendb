@@ -30,7 +30,7 @@ def _expenses_by_user(db: Session, start: date, end: date) -> dict[int, Decimal]
 
 
 def _revenue_by_user(db: Session, start: date, end: date) -> dict[int, Decimal]:
-    """Net cash each collector took in: line totals plus shipping and tax, less fees.
+    """Cash each collector took in, from the sale lines.
 
     Counted on the day the money landed, not the day the deal was agreed. A
     sale that is still owed for is not cash anyone is holding, so it cannot
@@ -48,9 +48,7 @@ def _revenue_by_user(db: Session, start: date, end: date) -> dict[int, Decimal]:
     rows = db.execute(
         select(
             Sale.collected_by_id,
-            func.sum(
-                func.coalesce(item_totals.c.subtotal, 0) + Sale.shipping + Sale.tax - Sale.fees
-            ),
+            func.sum(func.coalesce(item_totals.c.subtotal, 0)),
         )
         .outerjoin(item_totals, item_totals.c.sale_id == Sale.id)
         .where(

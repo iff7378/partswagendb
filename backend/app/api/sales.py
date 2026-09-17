@@ -72,7 +72,7 @@ def _to_detail(db: Session, sale: Sale) -> SaleDetail:
         ).scalars()
     )
     detail.costs = [SaleCost.model_validate(cost) for cost in costs]
-    detail.net_after_costs = sale.net_collected - sum((cost.amount for cost in costs), Decimal("0"))
+    detail.net_after_costs = sale.subtotal - sum((cost.amount for cost in costs), Decimal("0"))
     return detail
 
 
@@ -402,7 +402,7 @@ def _entry(sale: Sale, by_id: dict[int, Location]) -> ScheduleEntry:
         buyer_name=sale.buyer_name,
         buyer_contact=sale.buyer_contact,
         channel=sale.channel,
-        net_collected=sale.net_collected,
+        subtotal=sale.subtotal,
         paid_on=sale.paid_on,
         summary=", ".join(item.description for item in sale.items),
         part_count=len(parts),

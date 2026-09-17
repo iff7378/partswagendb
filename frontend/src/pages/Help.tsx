@@ -381,10 +381,11 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           collector attached, which quietly lost income. Record the sale instead.
         </Note>
         <P>
-          <strong>What it cost us</strong> on each sale is where postage, packing and fees go,
-          against whoever actually paid them. This matters when one of you collects the money
-          and the other buys the label: without it the collector looks like they took the whole
-          amount and the other is quietly out of pocket.
+          <strong>What it cost us</strong> on each sale is where postage, packing and
+          marketplace fees go, against whoever actually paid them. It is the only place money
+          going out is recorded. This matters when one of you collects the money and the other
+          buys the label: without it the collector looks like they took the whole amount and
+          the other is quietly out of pocket.
         </P>
         <Note>
           Fronting a cost and bearing it are different things. If Kevin pays $12 to ship a $130
@@ -552,9 +553,9 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           </>,
           <>
             <strong>Per-car profit will not add up to the venture&rsquo;s profit.</strong> Shared
-            costs sit outside the cars on purpose, and fees are charged on a whole sale rather
-            than on one car. The Money page shows that arithmetic under &ldquo;Why this does not
-            match the totals at the top&rdquo;.
+            costs sit outside the cars on purpose, and a line can name no car at all. The Money
+            page shows that arithmetic under &ldquo;Why this does not match the totals at the
+            top&rdquo;.
           </>,
           <>
             <strong>A new task belongs to nobody until someone claims it.</strong> That is
@@ -571,6 +572,13 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
             browser has kept an old copy of the app, so what you are looking at is not what
             the server is serving. Press <em>Reload</em>; nothing you have typed on a saved
             record is lost.
+          </>,
+          <>
+            <strong>A sale is its lines, and nothing else.</strong> There is no shipping, fee or
+            tax box on a sale any more. Whatever the buyer hands over is the price you type; what
+            it cost you to get it to them is a cost under <em>What it cost us</em>, against
+            whoever paid. Two boxes called &ldquo;Shipping&rdquo; meaning opposite directions of
+            money was a mistake waiting to happen.
           </>,
           <>
             <strong>Deleting a car keeps its sales.</strong> The sale record survives with its

@@ -111,9 +111,9 @@ export default function VehicleResults() {
 /**
  * Why the rows above do not add up to the venture's figures.
  *
- * They legitimately differ: overheads belong to no car, fees are charged on a
- * sale rather than a line. Stating the arithmetic is the point -- an
- * unexplained gap between two screens is how confidence in the numbers goes.
+ * They legitimately differ: overheads belong to no car, and a line can name no
+ * car at all. Stating the arithmetic is the point -- an unexplained gap between
+ * two screens is how confidence in the numbers goes.
  */
 function Reconciliation({
   results,
@@ -126,18 +126,14 @@ function Reconciliation({
 }) {
   const overheads = Number(results.general_expenses)
   const unattributed = Number(results.unattributed_revenue)
-  const adjustments = Number(results.sale_adjustments)
 
-  if (overheads === 0 && unattributed === 0 && adjustments === 0) return null
+  if (overheads === 0 && unattributed === 0) return null
 
   const rows: { label: string; value: number }[] = [
     { label: 'Taken across every car', value: carRevenue },
   ]
   if (unattributed !== 0) {
     rows.push({ label: 'Sold with no car attached', value: unattributed })
-  }
-  if (adjustments !== 0) {
-    rows.push({ label: 'Shipping and tax, less fees', value: adjustments })
   }
   if (overheads !== 0) {
     rows.push({ label: 'Costs not tied to a car', value: -overheads })
@@ -158,7 +154,7 @@ function Reconciliation({
         <div className="flex justify-between gap-4 border-t border-slate-200 pt-1 font-semibold">
           <dt>The venture&rsquo;s profit</dt>
           <dd className="tabular-nums">
-            {money(carProfit + unattributed + adjustments - overheads)}
+            {money(carProfit + unattributed - overheads)}
           </dd>
         </div>
       </dl>

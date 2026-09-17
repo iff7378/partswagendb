@@ -132,7 +132,7 @@ export default function Dashboard() {
                   </span>
                 </span>
                 <span className="text-sm font-semibold tabular-nums">
-                  {money(entry.net_collected)}
+                  {money(entry.subtotal)}
                 </span>
               </Link>
             ))}

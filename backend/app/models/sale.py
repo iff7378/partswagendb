@@ -66,10 +66,6 @@ class Sale(Base, TimestampMixin):
     buyer_name: Mapped[str | None] = mapped_column(String(255))
     buyer_contact: Mapped[str | None] = mapped_column(String(255))
 
-    shipping: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
-    fees: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
-    tax: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"), nullable=False)
-
     # Who physically received the money. Drives the settle-up report.
     collected_by_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -100,12 +96,15 @@ class Sale(Base, TimestampMixin):
 
     @property
     def subtotal(self) -> Decimal:
-        return sum((item.line_total for item in self.items), Decimal("0"))
+        """What the collector took: the lines and nothing else.
 
-    @property
-    def net_collected(self) -> Decimal:
-        """Cash that actually landed in the collector's pocket."""
-        return self.subtotal + self.shipping + self.tax - self.fees
+        There were once shipping, fees and tax fields adjusting this. They were
+        removed because "Shipping" on a sale and "Shipping" as a cost meant
+        opposite directions of money with nothing on screen to say which, and
+        because only a cost row can say *who* paid. Anything the venture spends
+        is a cost row now; anything the buyer hands over is a line.
+        """
+        return sum((item.line_total for item in self.items), Decimal("0"))
 
 
 class SaleItem(Base, TimestampMixin):

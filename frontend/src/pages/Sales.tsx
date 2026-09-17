@@ -106,7 +106,7 @@ export default function Sales() {
   // What is agreed but not yet in the bank. Worth seeing without hunting.
   const owed = (sales.data?.items ?? [])
     .filter((sale) => sale.paid_on === null)
-    .reduce((sum, sale) => sum + Number(sale.net_collected), 0)
+    .reduce((sum, sale) => sum + Number(sale.subtotal), 0)
 
   return (
     <>
@@ -186,9 +186,6 @@ function NewSaleForm({
     channel: 'local' as SaleChannel,
     buyer_name: '',
     collected_by_id: '',
-    shipping: '',
-    fees: '',
-    tax: '',
   })
   // Most sales are a walk-in paying cash and walking off with the part, so
   // that is the default; the other states are one click away.
@@ -214,9 +211,6 @@ function NewSaleForm({
         channel: form.channel,
         buyer_name: form.buyer_name || null,
         collected_by_id: Number(form.collected_by_id),
-        shipping: form.shipping || '0',
-        fees: form.fees || '0',
-        tax: form.tax || '0',
         items: toPayload(lines),
       }),
     onSuccess: () => {
@@ -239,7 +233,7 @@ function NewSaleForm({
   }
 
   const subtotal = subtotalOf(lines)
-  const net = subtotal + Number(form.shipping || 0) + Number(form.tax || 0) - Number(form.fees || 0)
+  const net = subtotal
 
   return (
     <form onSubmit={onSubmit} className="card mb-5 space-y-4 p-4 pb-32 md:pb-28">
@@ -344,40 +338,6 @@ function NewSaleForm({
         </p>
       </fieldset>
 
-      {/* Folded away: across every sale recorded so far all three have been
-          zero, so as permanent fields they cost three rows and buy nothing. */}
-      <details className="rounded-lg border border-slate-200 px-4 py-3">
-        <summary className="cursor-pointer text-sm font-medium text-ink-soft">
-          Shipping, fees or tax
-        </summary>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <Field label="Shipping">
-            <input
-              className="field"
-              inputMode="decimal"
-              value={form.shipping}
-              onChange={(e) => setForm((p) => ({ ...p, shipping: e.target.value }))}
-            />
-          </Field>
-          <Field label="Fees">
-            <input
-              className="field"
-              inputMode="decimal"
-              value={form.fees}
-              onChange={(e) => setForm((p) => ({ ...p, fees: e.target.value }))}
-            />
-          </Field>
-          <Field label="Tax">
-            <input
-              className="field"
-              inputMode="decimal"
-              value={form.tax}
-              onChange={(e) => setForm((p) => ({ ...p, tax: e.target.value }))}
-            />
-          </Field>
-        </div>
-      </details>
-
       {/* Fixed rather than sticky: a sticky element that is the last child of
           its container has nothing below it to stick against, so it never
           pins. Sits above the mobile tab bar, which is 4rem tall. */}
@@ -475,11 +435,8 @@ function SaleRow({
               sale.voided_at ? 'text-ink-soft line-through' : ''
             }`}
           >
-            {money(sale.net_collected)}
+            {money(sale.subtotal)}
           </p>
-          {Number(sale.fees) > 0 && (
-            <p className="text-xs text-ink-soft">after {money(sale.fees)} fees</p>
-          )}
         </div>
         <span className="text-xs text-ink-soft">{open ? '▲' : '▼'}</span>
       </button>
@@ -543,24 +500,16 @@ function SaleRow({
               </table>
 
               <dl className="space-y-1 text-sm">
-                <Line label="Subtotal" value={detail.data.subtotal} />
-                {Number(detail.data.shipping) > 0 && (
-                  <Line label="Shipping" value={detail.data.shipping} />
-                )}
-                {Number(detail.data.tax) > 0 && <Line label="Tax" value={detail.data.tax} />}
-                {Number(detail.data.fees) > 0 && (
-                  <Line label="Fees" value={`-${detail.data.fees}`} />
-                )}
                 <div className="flex justify-between border-t border-slate-200 pt-1 font-semibold">
                   <dt>Collected by {detail.data.collected_by.full_name}</dt>
-                  <dd className="tabular-nums">{money(detail.data.net_collected)}</dd>
+                  <dd className="tabular-nums">{money(detail.data.subtotal)}</dd>
                 </div>
               </dl>
 
               <SaleCosts
                 saleId={sale.id}
                 costs={detail.data.costs}
-                netCollected={detail.data.net_collected}
+                netCollected={detail.data.subtotal}
                 netAfterCosts={detail.data.net_after_costs}
                 onChange={refresh}
               />
@@ -698,24 +647,12 @@ function PartLink({ part }: { part: SaleItemPart }) {
   )
 }
 
-function Line({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between text-ink-soft">
-      <dt>{label}</dt>
-      <dd className="tabular-nums">{money(value)}</dd>
-    </div>
-  )
-}
-
 function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
   const [form, setForm] = useState({
     sold_on: sale.sold_on,
     channel: sale.channel,
     buyer_name: sale.buyer_name ?? '',
     collected_by_id: String(sale.collected_by_id),
-    shipping: sale.shipping,
-    fees: sale.fees,
-    tax: sale.tax,
     meetup_at: toLocalInput(sale.meetup_at),
   })
   const [lines, setLines] = useState<Line[]>(() => toLines(sale))
@@ -737,9 +674,6 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
         channel: form.channel,
         buyer_name: form.buyer_name || null,
         collected_by_id: Number(form.collected_by_id),
-        shipping: form.shipping || '0',
-        fees: form.fees || '0',
-        tax: form.tax || '0',
         items: toPayload(lines),
       }),
     onSuccess: onDone,
@@ -800,33 +734,6 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
               </option>
             ))}
           </select>
-        </Field>
-
-        <Field label="Shipping">
-          <input
-            className="field"
-            inputMode="decimal"
-            value={form.shipping}
-            onChange={(e) => setForm((p) => ({ ...p, shipping: e.target.value }))}
-          />
-        </Field>
-
-        <Field label="Fees">
-          <input
-            className="field"
-            inputMode="decimal"
-            value={form.fees}
-            onChange={(e) => setForm((p) => ({ ...p, fees: e.target.value }))}
-          />
-        </Field>
-
-        <Field label="Tax">
-          <input
-            className="field"
-            inputMode="decimal"
-            value={form.tax}
-            onChange={(e) => setForm((p) => ({ ...p, tax: e.target.value }))}
-          />
         </Field>
 
         <Field label="When they are coming" hint="Clear it to take this off the schedule.">

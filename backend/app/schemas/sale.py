@@ -57,9 +57,6 @@ class SaleBase(BaseModel):
     channel: SaleChannel = SaleChannel.LOCAL
     buyer_name: str | None = None
     buyer_contact: str | None = None
-    shipping: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
-    fees: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
-    tax: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     collected_by_id: int
     payment_method: str | None = None
     notes: str | None = None
@@ -78,9 +75,6 @@ class SaleUpdate(BaseModel):
     channel: SaleChannel | None = None
     buyer_name: str | None = None
     buyer_contact: str | None = None
-    shipping: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    fees: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    tax: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     collected_by_id: int | None = None
     payment_method: str | None = None
     notes: str | None = None
@@ -97,7 +91,6 @@ class SaleRead(SaleBase, ORMModel):
     void_reason: str | None = None
     voided_by: UserBrief | None = None
     subtotal: Decimal
-    net_collected: Decimal
     collected_by: UserBrief
     created_at: datetime
 
@@ -117,7 +110,7 @@ class SaleDetail(SaleRead):
     items: list[SaleItemRead] = Field(default_factory=list)
     costs: list[SaleCost] = Field(default_factory=list)
     # What the venture actually kept: collected less what was spent getting it
-    # there. Not the same as net_collected, which is one person's takings.
+    # there. Not the same as the subtotal, which is one person's takings.
     net_after_costs: Decimal = Decimal("0")
 
 
@@ -136,7 +129,7 @@ class ScheduleEntry(BaseModel):
     buyer_name: str | None = None
     buyer_contact: str | None = None
     channel: SaleChannel
-    net_collected: Decimal
+    subtotal: Decimal
     paid_on: date | None = None
     summary: str
     part_count: int = 0

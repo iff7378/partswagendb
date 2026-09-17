@@ -224,7 +224,7 @@ function Row({ entry, showDay = false }: { entry: ScheduleEntry; showDay?: boole
       </div>
 
       <div className="text-right">
-        <p className="font-semibold tabular-nums">{money(entry.net_collected)}</p>
+        <p className="font-semibold tabular-nums">{money(entry.subtotal)}</p>
         <span className={`chip ring-1 ${SALE_STATE_STYLES[entry.state]}`}>
           {entry.paid_on ? 'Paid' : SALE_STATE_LABELS[entry.state]}
         </span>
