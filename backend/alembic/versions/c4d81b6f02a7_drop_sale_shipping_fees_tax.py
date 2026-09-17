@@ -10,9 +10,8 @@ Revision ID: c4d81b6f02a7
 Revises: e6c8f13a920b
 """
 
-from decimal import Decimal
-
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "c4d81b6f02a7"
