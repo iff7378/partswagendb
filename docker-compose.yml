@@ -15,7 +15,16 @@ services:
       retries: 5
 
   minio:
-    image: minio/minio:latest
+    # SILO, the community fork of MinIO (Pigsty/Vonng). Upstream MinIO was
+    # archived in April 2026 and its Docker Hub images withdrawn in October
+    # 2025 -- the "pull access denied" is not an auth wall, there is nothing
+    # left behind it. The fork keeps the wire protocol and on-disk format, so
+    # this reads the existing volume as-is, and unlike upstream it is still
+    # shipping CVE fixes.
+    #
+    # Pinned, not :latest. Floating on :latest is how a withdrawn image went
+    # unnoticed until it blocked a deploy.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
