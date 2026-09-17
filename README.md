@@ -22,8 +22,10 @@ car tracks what was spent on it against what its parts brought in.
 QR code, and label sheets print to an Avery 5160 grid. Scan a shelf to see what
 is on it, or scan a part to jump straight to it.
 
-**Sales** — record what sold, to whom, through which channel, and for how much,
-net of fees. Selling a part marks it sold; voiding a sale puts it back in stock.
+**Sales** — record what sold, to whom, through which channel, and for how much.
+A sale is its lines and nothing else; what it cost to get the part to the buyer
+is a cost against whoever paid it. Selling a part marks it sold; voiding a sale
+puts it back in stock.
 
 **Settle up** — the part that makes a two-person operation work. Every expense
 records who paid it and every sale records who collected the cash. Ask for a
