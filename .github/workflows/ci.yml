@@ -11,6 +11,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changelog:
+    name: Release note
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need the previous commit to see what this push changed.
+          fetch-depth: 0
+
+      - name: Fail if app code changed without a release note
+        run: |
+          # Ian has asked twice for the What's new page to be kept current, and
+          # asking someone to remember is not a mechanism. A change nobody is
+          # told about may as well not have shipped -- and a release log with
+          # gaps is worse than none, because it reads as complete.
+          #
+          # Escape hatch for work that genuinely changes nothing anyone would
+          # notice: put [no changelog] in the commit message.
+          base="${{ github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "No previous commit to compare against; skipping."
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$base" "${{ github.sha }}")"
+          echo "Changed files:"; echo "$changed"
+
+          if ! echo "$changed" | grep -qE '^(frontend/src|backend/app)/'; then
+            echo "No application code touched."
+            exit 0
+          fi
+
+          if echo "$changed" | grep -q '^frontend/src/lib/changelog.ts$'; then
+            echo "Release note updated."
+            exit 0
+          fi
+
+          if git log --format=%B "$base..${{ github.sha }}" | grep -qF '[no changelog]'; then
+            echo "::warning::Application code changed with no release note, waived by [no changelog]."
+            exit 0
+          fi
+
+          echo "::error::Application code changed but frontend/src/lib/changelog.ts did not."
+          echo "Add an entry to today's release, or put [no changelog] in the commit message"
+          echo "if genuinely nobody using the app would notice."
+          exit 1
+
   backend:
     name: Backend
     runs-on: ubuntu-latest

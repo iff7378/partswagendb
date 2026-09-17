@@ -49,6 +49,10 @@ export const RELEASES: Release[] = [
         kind: 'better',
         text: 'The part on a sale line is now a link — tap it and you are on the part. Each line also names the car the part came off, which is what tells three identically named parts apart. A lot lists every part it covered the same way.',
       },
+      {
+        kind: 'fixed',
+        text: 'Releasing an update could be blocked by an unrelated problem at someone else’s image registry, which held this change up for a while. Deploys now only fetch this app, not the database and photo store alongside it.',
+      },
     ],
   },
   {

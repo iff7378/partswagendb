@@ -33,7 +33,14 @@ nobody using the app cares about, and it cannot be known before the build runs
 anyway. Add to today's entry if there is one; start a new one if there is not.
 
 The page shows what is running at the top, so it also answers whether a deploy
-landed. The entry marks itself **Running now** once that version is
+landed.
+
+**CI enforces this.** A push touching `frontend/src` or `backend/app` without
+also touching `frontend/src/lib/changelog.ts` fails the Release note job. If the
+change genuinely alters nothing anyone would notice — a refactor, a test, a
+dependency bump — put `[no changelog]` in the commit message and it passes with
+a warning. Infrastructure counts if it affected them: a deploy that could not
+ship is worth a line, even though no screen changed. The entry marks itself **Running now** once that version is
 live, which is the quickest way to tell whether a deploy actually landed.
 
 ## 1. Push
