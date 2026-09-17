@@ -42,6 +42,16 @@ export const KIND_STYLES: Record<ChangeKind, string> = {
 
 export const RELEASES: Release[] = [
   {
+    on: '2026-09-17',
+    headline: 'The app tells you when your page is out of date',
+    changes: [
+      {
+        kind: 'fixed',
+        text: 'A browser could hold on to an old copy of the app, so a refresh showed week-old content while the version number at the top looked current — nothing on screen said anything was wrong. Each page now knows which version it is and checks against the server, so if you are running an old copy a bar appears at the top with a Reload button.',
+      },
+    ],
+  },
+  {
     on: '2026-09-16',
     headline: 'Sale lines link to their parts',
     changes: [

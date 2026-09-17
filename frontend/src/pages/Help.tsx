@@ -567,6 +567,12 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
             new name is always accepted &mdash; just keep typing.
           </>,
           <>
+            <strong>A bar saying you are running an older version means it.</strong> Your
+            browser has kept an old copy of the app, so what you are looking at is not what
+            the server is serving. Press <em>Reload</em>; nothing you have typed on a saved
+            record is lost.
+          </>,
+          <>
             <strong>Deleting a car keeps its sales.</strong> The sale record survives with its
             description, so settled history never changes underneath you.
           </>,

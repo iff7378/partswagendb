@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, Outlet } from 'react-router-dom'
 
+import UpdateBanner from './UpdateBanner'
 import { api } from '../lib/api'
 
 import { useAuth } from '../lib/auth'
@@ -33,6 +34,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-dvh">
+      <UpdateBanner />
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
           <NavLink to="/" className="flex items-center gap-2 font-bold tracking-tight">

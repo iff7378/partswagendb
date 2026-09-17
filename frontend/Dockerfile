@@ -9,6 +9,13 @@ COPY . .
 
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
+# Baked into the bundle so the running page can tell whether it is the version
+# the server is serving. A browser holding a stale copy then knows to say so
+# rather than quietly showing week-old code.
+ARG APP_VERSION=dev
+ENV VITE_APP_VERSION=$APP_VERSION
+
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime
