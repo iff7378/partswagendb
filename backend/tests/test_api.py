@@ -1748,3 +1748,43 @@ def test_a_sale_line_names_the_car_each_part_came_off(
     assert lot["Emissions System"]["vehicle_name"] == "The blue one"
     assert lot["Bracket"]["vehicle_name"] is None
     assert lot["Bracket"]["vehicle_id"] is None
+
+
+def test_sale_notes_round_trip(client: TestClient, auth_headers, admin) -> None:
+    part = client.post(
+        "/api/parts", headers=auth_headers, json={"title": "Wing mirror", "status": "available"}
+    ).json()
+    sale = client.post(
+        "/api/sales",
+        headers=auth_headers,
+        json={
+            "sold_on": "2026-09-20",
+            "collected_by_id": admin.id,
+            "notes": "Buyer wants the bracket too.\nCollecting Saturday.",
+            "items": [{"part_ids": [part["id"]], "unit_price": "40.00"}],
+        },
+    )
+    assert sale.status_code == 201, sale.text
+    sale = sale.json()
+    # Line breaks survive: they are usually the structure someone meant.
+    assert sale["notes"] == "Buyer wants the bracket too.\nCollecting Saturday."
+
+    detail = client.get(f"/api/sales/{sale['id']}", headers=auth_headers).json()
+    assert detail["notes"] == sale["notes"]
+
+    changed = client.patch(
+        f"/api/sales/{sale['id']}", headers=auth_headers, json={"notes": "Bracket found."}
+    ).json()
+    assert changed["notes"] == "Bracket found."
+
+    # Explicit null clears it, rather than being read as "leave alone".
+    cleared = client.patch(
+        f"/api/sales/{sale['id']}", headers=auth_headers, json={"notes": None}
+    ).json()
+    assert cleared["notes"] is None
+
+    # A note is part of the record, so changing it is visible in history.
+    audit = client.get(f"/api/audit?entity=Sale&entity_id={sale['id']}", headers=auth_headers)
+    assert audit.status_code == 200, audit.text
+    touched = [e for e in audit.json()["items"] if "notes" in (e.get("changes") or {})]
+    assert touched, "changing a note left no trace in the history"

@@ -381,6 +381,12 @@ const SECTIONS: { id: string; title: string; body: React.ReactNode }[] = [
           collector attached, which quietly lost income. Record the sale instead.
         </Note>
         <P>
+          <strong>Notes</strong> are free text on the sale, set when you record it or later by
+          editing. Use them for whatever will not be obvious in a month: what was agreed, what
+          was wrong with the part, who to ask for at the gate. They show on the sale once you
+          expand it, and editing one is recorded in History like any other change.
+        </P>
+        <P>
           <strong>What it cost us</strong> on each sale is where postage, packing and
           marketplace fees go, against whoever actually paid them. It is the only place money
           going out is recorded. This matters when one of you collects the money and the other

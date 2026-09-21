@@ -186,6 +186,7 @@ function NewSaleForm({
     channel: 'local' as SaleChannel,
     buyer_name: '',
     collected_by_id: '',
+    notes: '',
   })
   // Most sales are a walk-in paying cash and walking off with the part, so
   // that is the default; the other states are one click away.
@@ -211,6 +212,7 @@ function NewSaleForm({
         channel: form.channel,
         buyer_name: form.buyer_name || null,
         collected_by_id: Number(form.collected_by_id),
+        notes: form.notes || null,
         items: toPayload(lines),
       }),
     onSuccess: () => {
@@ -337,6 +339,18 @@ function NewSaleForm({
                 : 'Just agreed. The parts are held, and nothing hits the books yet.'}
         </p>
       </fieldset>
+
+      <Field
+        label="Notes"
+        hint="Anything worth remembering later: what was agreed, what was wrong with it, who to ask for."
+      >
+        <textarea
+          className="field"
+          rows={2}
+          value={form.notes}
+          onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+        />
+      </Field>
 
       {/* Fixed rather than sticky: a sticky element that is the last child of
           its container has nothing below it to stick against, so it never
@@ -506,6 +520,17 @@ function SaleRow({
                 </div>
               </dl>
 
+              {detail.data.notes && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-soft">
+                    Notes
+                  </p>
+                  {/* Kept as typed: line breaks in a note are usually the
+                      structure someone meant. */}
+                  <p className="whitespace-pre-wrap text-sm">{detail.data.notes}</p>
+                </div>
+              )}
+
               <SaleCosts
                 saleId={sale.id}
                 costs={detail.data.costs}
@@ -654,6 +679,7 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
     buyer_name: sale.buyer_name ?? '',
     collected_by_id: String(sale.collected_by_id),
     meetup_at: toLocalInput(sale.meetup_at),
+    notes: sale.notes ?? '',
   })
   const [lines, setLines] = useState<Line[]>(() => toLines(sale))
 
@@ -674,6 +700,7 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
         channel: form.channel,
         buyer_name: form.buyer_name || null,
         collected_by_id: Number(form.collected_by_id),
+        notes: form.notes || null,
         items: toPayload(lines),
       }),
     onSuccess: onDone,
@@ -745,6 +772,15 @@ function EditSale({ sale, onDone }: { sale: SaleDetail; onDone: () => void }) {
           />
         </Field>
       </div>
+
+      <Field label="Notes">
+        <textarea
+          className="field"
+          rows={2}
+          value={form.notes}
+          onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+        />
+      </Field>
 
       <div className="flex gap-2">
         <button

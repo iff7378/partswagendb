@@ -42,6 +42,16 @@ export const KIND_STYLES: Record<ChangeKind, string> = {
 
 export const RELEASES: Release[] = [
   {
+    on: '2026-09-20',
+    headline: 'Notes on a sale',
+    changes: [
+      {
+        kind: 'new',
+        text: 'A sale now has a Notes box, when you record it and when you edit it — what was agreed, what was wrong with the part, who to ask for on the day. It shows on the sale once expanded, with your line breaks kept as you typed them. Changing a note shows up in History like any other change.',
+      },
+    ],
+  },
+  {
     on: '2026-09-18',
     headline: 'One place to record money going out',
     changes: [
